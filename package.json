@@ -1,26 +1,16 @@
 {
   "name": "nomad-incubator",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "frontend",
+    "infrastructure"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "next": "16.3.5",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.5",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "dev": "npm run dev --workspace=@nomad/frontend",
+    "build": "npm run build --workspace=@nomad/frontend",
+    "lint": "npm run lint --workspace=@nomad/frontend",
+    "frontend:dev": "npm run dev --workspace=@nomad/frontend",
+    "frontend:build": "npm run build --workspace=@nomad/frontend"
   }
 }
