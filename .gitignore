@@ -1,16 +1,19 @@
+# Next.js
+.next/
+out/
+
 # Node
 node_modules/
-.next/
-
-# Environment variables
-.env
-.env.local
-.env.*.local
 
 # Python
-backend/.venv/
+.venv/
 __pycache__/
 *.py[cod]
 
 # AWS CDK
 cdk.out/
+
+# Environment files
+.env
+.env.local
+.env.*.local
