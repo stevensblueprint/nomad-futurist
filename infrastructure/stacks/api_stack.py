@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import aws_cdk as cdk
-from aws_cdk import aws_iam as iam
+from aws_cdk import (
+    Stack,
+    aws_iam as iam,
+    aws_lambda as lambda_,
+    aws_logs as logs,
+)
 from constructs import Construct
 
+LAMBDA_ROOT = Path(__file__).resolve().parent.parent / "lambda"
 
-class ApiStack(cdk.Stack):
+
+class ApiStack(Stack):
     def __init__(
         self,
         scope: Construct,
@@ -20,6 +29,7 @@ class ApiStack(cdk.Stack):
             **kwargs,
         )
 
+        ### IAM Roles for Lambda functions ###
         # Project Registration Lambda execution role
         registration_lambda_role = iam.Role(
             self,
@@ -46,5 +56,43 @@ class ApiStack(cdk.Stack):
             )
         )
 
-        # API Gateway and Lambda infrastructure
-        # will be implemented here.
+        ### Lambda functions ###
+        # Project Registration Lambda
+        registration_lambda = lambda_.Function(
+            self,
+            "ProjectRegistrationLambda",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="handler.handler",
+            code=lambda_.Code.from_asset(
+                str(LAMBDA_ROOT / "project_registration")
+            ),
+            role=registration_lambda_role,
+            memory_size=256,
+            timeout=cdk.Duration.seconds(10),
+            architecture=lambda_.Architecture.ARM_64,
+            environment={
+                "ENVIRONMENT": "development",
+            },
+            log_retention=logs.RetentionDays.ONE_WEEK,
+        )
+
+        # Project Validation Lambda
+        validation_lambda = lambda_.Function(
+            self,
+            "ProjectValidationLambda",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="handler.handler",
+            code=lambda_.Code.from_asset(
+                str(LAMBDA_ROOT / "project_validation")
+            ),
+            role=validation_lambda_role,
+            memory_size=256,
+            timeout=cdk.Duration.seconds(10),
+            architecture=lambda_.Architecture.ARM_64,
+            environment={
+                "ENVIRONMENT": "development",
+            },
+            log_retention=logs.RetentionDays.ONE_WEEK,
+        )
+
+        # API Gateway and route integrations will be added in later steps.
