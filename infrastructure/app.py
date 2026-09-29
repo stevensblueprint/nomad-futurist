@@ -2,9 +2,7 @@ import os
 
 import aws_cdk as cdk
 
-from stacks.api_stack import ApiStack
-from stacks.auth_stack import AuthStack
-from stacks.db_stack import DatabaseStack
+from stacks.nomad_stack import NomadStack
 
 
 app = cdk.App()
@@ -14,21 +12,9 @@ environment = cdk.Environment(
     region=os.getenv("CDK_DEFAULT_REGION", "us-east-1"),
 )
 
-AuthStack(
+NomadStack(
     app,
-    "NomadAuthStack",
-    env=environment,
-)
-
-DatabaseStack(
-    app,
-    "NomadDatabaseStack",
-    env=environment,
-)
-
-ApiStack(
-    app,
-    "NomadApiStack",
+    "NomadStack",
     env=environment,
 )
 

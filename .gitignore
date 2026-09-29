@@ -19,3 +19,7 @@ cdk.out/
 .env
 .env.local
 .env.*.local
+
+
+# flake lock
+flake.lock
