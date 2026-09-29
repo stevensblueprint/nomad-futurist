@@ -29,7 +29,7 @@ Amplify.configure({
 });
 
 
-export default function Login() {
+export default function Auth() {
   return (
     <Authenticator>
       {({ signOut, user }) => (
