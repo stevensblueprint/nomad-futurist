@@ -6,7 +6,7 @@ from constructs import Construct
 class AuthConstruct(Construct):
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
-
+        # Cognito User Pool
         self.user_pool = cognito.CfnUserPool(
             self,
             "CognitoUserPool",
@@ -60,7 +60,7 @@ class AuthConstruct(Construct):
             ),
         )
         self._retain(self.user_pool)
-
+        # App Client
         self.app_client = cognito.CfnUserPoolClient(
             self,
             "CognitoUserPoolClient",
@@ -90,7 +90,7 @@ class AuthConstruct(Construct):
             enable_token_revocation=True,
         )
         self._retain(self.app_client)
-
+        # User Groups
         self.groups = []
         for logical_id, group_name in (
             ("CognitoUserPoolGroupFounders", "Founders"),
