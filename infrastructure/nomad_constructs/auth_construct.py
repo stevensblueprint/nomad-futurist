@@ -9,7 +9,7 @@ class AuthConstruct (Construct):
 		# Cognito User Pool
 		self.user_pool = cognito.UserPool(
 			self, "NomadUserPool",
-			user_pool_name = "nomad-incubator-user-pool",
+			user_pool_name = "nomad_incubator",
 			self_sign_up_enabled=True,
 			sign_in_aliases = cognito.SignInAliases(username=True, email=True)
 			
@@ -17,8 +17,9 @@ class AuthConstruct (Construct):
 		# App Client
 		self.user_pool_client = self.user_pool.add_client(
 			"NomadWebClient", 
-			user_pool_client_name="nomad-incubator-web-client",
+			user_pool_client_name="nomad_incubator_SPA",
 			generate_secret=False,
+			
 			supported_identity_providers=[
 				cognito.UserPoolClientIdentityProvider.COGNITO
 			],
@@ -28,7 +29,7 @@ class AuthConstruct (Construct):
 
 		)
 		# User Groups
-		groups = ["Founders", "Technical Staff", "Mentors", "Admin"] 
+		groups = ["Founders", "Technical_Staff", "Mentors", "Admin"] 
 		self.groups = {} 
 		for group_name in groups: 
 			clean_id = group_name.replace(" ", "") 
