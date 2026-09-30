@@ -2,20 +2,12 @@ import aws_cdk as cdk
 from aws_cdk import aws_cognito as cognito
 from constructs import Construct
 
-class AuthStack(cdk.Stack):
-    def __init__(
-        self,
-        scope: Construct,
-        construct_id: str,
-        **kwargs,
-    ) -> None:
-        super().__init__(
-            scope,
-            construct_id,
-            **kwargs,
-        )
 
-        user_pool = cognito.CfnUserPool(
+class AuthConstruct(Construct):
+    def __init__(self, scope: Construct, construct_id: str) -> None:
+        super().__init__(scope, construct_id)
+
+        self.user_pool = cognito.CfnUserPool(
             self,
             "CognitoUserPool",
             user_pool_name="nomad-users",
@@ -67,11 +59,12 @@ class AuthStack(cdk.Stack):
                 ]
             ),
         )
+        self._retain(self.user_pool)
 
-        client = cognito.CfnUserPoolClient(
+        self.app_client = cognito.CfnUserPoolClient(
             self,
             "CognitoUserPoolClient",
-            user_pool_id=user_pool.ref,
+            user_pool_id=self.user_pool.ref,
             client_name="nomad-incubator",
             generate_secret=True,
             callback_ur_ls=["https://d84l1y8p4kdic.cloudfront.net"],
@@ -96,35 +89,44 @@ class AuthStack(cdk.Stack):
             prevent_user_existence_errors="ENABLED",
             enable_token_revocation=True,
         )
+        self._retain(self.app_client)
 
+        self.groups = []
         for logical_id, group_name in (
             ("CognitoUserPoolGroupFounders", "Founders"),
             ("CognitoUserPoolGroupTechnicalStaff", "TechnicalStaff"),
             ("CognitoUserPoolGroupMentors", "Mentors"),
             ("CognitoUserPoolGroupAdmin", "Admin"),
         ):
-            cognito.CfnUserPoolGroup(
+            group = cognito.CfnUserPoolGroup(
                 self,
                 logical_id,
-                user_pool_id=user_pool.ref,
+                user_pool_id=self.user_pool.ref,
                 group_name=group_name,
             )
+            self._retain(group)
+            self.groups.append(group)
 
         cdk.CfnOutput(
             self,
             "CognitoUserPoolId",
-            value="us-east-1_w11IV6Jfg",
-            description="Existing Nomad Cognito User Pool ID",
+            value=self.user_pool.ref,
+            description="Nomad Cognito User Pool ID",
         )
         cdk.CfnOutput(
             self,
             "CognitoUserPoolAppClientId",
-            value=client.ref,
+            value=self.app_client.ref,
             description="Nomad Cognito User Pool App Client ID",
         )
         cdk.CfnOutput(
             self,
             "AwsRegion",
-            value=self.region,
+            value=cdk.Stack.of(self).region,
             description="AWS region containing Nomad Cognito resources",
         )
+
+    @staticmethod
+    def _retain(resource: cdk.CfnResource) -> None:
+        resource.cfn_options.deletion_policy = cdk.CfnDeletionPolicy.RETAIN
+        resource.cfn_options.update_replace_policy = cdk.CfnDeletionPolicy.RETAIN
