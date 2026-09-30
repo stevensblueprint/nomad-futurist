@@ -16,6 +16,10 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
   const isSignUp = mode === "sign-up";
   const [errors, setErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState("");
+  const [validationSummary, setValidationSummary] = useState({
+    message: "",
+    submission: 0,
+  });
 
   function validate(form: HTMLFormElement): FieldErrors {
     const data = new FormData(form);
@@ -47,6 +51,10 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
     const nextErrors = validate(form);
     setErrors(nextErrors);
     setNotice("");
+    setValidationSummary((current) => ({
+      message: Object.values(nextErrors).join(" "),
+      submission: current.submission + 1,
+    }));
 
     const firstInvalidField = Object.keys(nextErrors)[0];
     if (firstInvalidField) {
@@ -90,6 +98,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           onSubmit={handleSubmit}
           onChange={(event) => {
             setNotice("");
+            setValidationSummary((current) => ({ ...current, message: "" }));
             const nextErrors = validate(event.currentTarget);
             setErrors((currentErrors) => {
               const remainingErrors: FieldErrors = {};
@@ -102,6 +111,12 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           }}
           className={styles.form}
         >
+          <div className="sr-only" aria-live="assertive" aria-atomic="true">
+            {validationSummary.message && (
+              // Replace the message on each submit, even if the errors are unchanged.
+              <p key={validationSummary.submission}>{validationSummary.message}</p>
+            )}
+          </div>
           {fields.map(({ name, label, autoComplete }) => (
             <div className={styles.field} key={name}>
               <label htmlFor={name}>{label}</label>
