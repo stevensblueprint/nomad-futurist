@@ -3,41 +3,8 @@ from aws_cdk import aws_cognito as cognito
 from constructs import Construct
 
 
-<<<<<<< HEAD
-		# Cognito User Pool
-		self.user_pool = cognito.UserPool(
-			self, "NomadUserPool",
-			user_pool_name = "nomad_incubator",
-			self_sign_up_enabled=True,
-			sign_in_aliases = cognito.SignInAliases(username=True, email=True)
-			
-		)
-		# App Client
-		self.user_pool_client = self.user_pool.add_client(
-			"NomadWebClient", 
-			user_pool_client_name="nomad_incubator_SPA",
-			generate_secret=False,
-			
-			supported_identity_providers=[
-				cognito.UserPoolClientIdentityProvider.COGNITO
-			],
-			auth_flows=cognito.AuthFlow(
-				user_srp = True
-			)
-
-		)
-		# User Groups
-		groups = ["Founders", "Technical_Staff", "Mentors", "Admin"] 
-		self.groups = {} 
-		for group_name in groups: 
-			clean_id = group_name.replace(" ", "") 
-			self.groups[group_name] = cognito.CfnUserPoolGroup(
-				self, 
-				f"Group{clean_id}", 
-				user_pool_id=self.user_pool.user_pool_id, 
-				group_name=group_name, 
-				description=f"{group_name} role group for Nomad Incubator platform", )
-=======
+	
+            
 class AuthConstruct(Construct):
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
@@ -45,7 +12,7 @@ class AuthConstruct(Construct):
         self.user_pool = cognito.CfnUserPool(
             self,
             "CognitoUserPool",
-            user_pool_name="nomad-users",
+            user_pool_name="nomad_incubator",
             username_attributes=["email"],
             auto_verified_attributes=["email"],
             mfa_configuration="OFF",
@@ -100,7 +67,7 @@ class AuthConstruct(Construct):
             self,
             "CognitoUserPoolClient",
             user_pool_id=self.user_pool.ref,
-            client_name="nomad-incubator",
+            client_name="nomad_incubator_SPA",
             generate_secret=True,
             callback_ur_ls=["https://d84l1y8p4kdic.cloudfront.net"],
             allowed_o_auth_flows_user_pool_client=True,
@@ -165,4 +132,3 @@ class AuthConstruct(Construct):
     def _retain(resource: cdk.CfnResource) -> None:
         resource.cfn_options.deletion_policy = cdk.CfnDeletionPolicy.RETAIN
         resource.cfn_options.update_replace_policy = cdk.CfnDeletionPolicy.RETAIN
->>>>>>> origin/issue/nomad-cognito-pool

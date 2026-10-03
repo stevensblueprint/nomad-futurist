@@ -3,7 +3,33 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
+;
+import { Amplify } from 'aws-amplify';
+import { signUp, confirmSignUp, signIn } from "aws-amplify/auth";
 
+Amplify.configure({
+  Auth: {
+    Cognito: {
+      userPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID!,
+      userPoolClientId: process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID!,
+
+      loginWith: {
+        email: true
+      },
+      signUpVerificationMethod: 'code',
+      userAttributes: {
+        email: { required: true }
+      },
+      passwordFormat: {
+        minLength: 8,
+        requireLowercase: true,
+        requireUppercase: true,
+        requireNumbers: true,
+        requireSpecialCharacters: true
+      }
+    }
+  }
+});
 type FieldName = "email" | "password" | "confirmPassword";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
@@ -20,6 +46,11 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
     message: "",
     submission: 0,
   });
+  const [localAuthError, setLocalAuthError] = useState("");
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const displayedError = localAuthError || authenticationError;
 
   function validate(form: HTMLFormElement): FieldErrors {
     const data = new FormData(form);
@@ -35,7 +66,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
 
     if (!password) nextErrors.password = "Enter your password.";
 
-    if (isSignUp) {
+    if (isSignUp && !awaitingConfirmation) {
       if (!confirmation)
         nextErrors.confirmPassword = "Confirm your password.";
       else if (confirmation !== password)
@@ -44,13 +75,30 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
 
     return nextErrors;
   }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
+    if (awaitingConfirmation) {
+      const code = String(new FormData(form).get("password") ?? "").trim();
+      setSubmitting(true);
+      setLocalAuthError("");
+      try {
+        await confirmSignUp({ username: pendingEmail, confirmationCode: code });
+        setAwaitingConfirmation(false);
+        setNotice("Confirmed. You can now sign in.");
+      } catch {
+        setLocalAuthError("That confirmation code is incorrect.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+   
     const nextErrors = validate(form);
+
     setErrors(nextErrors);
-    setNotice("");
+        setNotice("");
     setValidationSummary((current) => ({
       message: Object.values(nextErrors).join(" "),
       submission: current.submission + 1,
@@ -62,21 +110,49 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
       return;
     }
 
-    setNotice(
-      isSignUp
-        ? "Your entries are valid. Account creation is not connected yet; no account has been created."
-        : "Your entries are valid. Authentication is not connected yet; you have not been signed in.",
-    );
+    const data = new FormData(form);
+    const email = String(data.get("email") ?? "").trim();
+    const password = String(data.get("password") ?? "");
+    
+   
+    setSubmitting(true);
+    try {
+      if (isSignUp) {
+        const { isSignUpComplete, nextStep } = await signUp({
+          username: email,
+          password,
+          options: { userAttributes: { email } },
+        });
+        if (!isSignUpComplete && nextStep.signUpStep === "CONFIRM_SIGN_UP") {
+          setPendingEmail(email);
+          setAwaitingConfirmation(true);
+          setNotice("Check your email for a confirmation code.");
+        }
+      } else {
+        await signIn({ username: email, password });
+        setNotice("Signed in.");
+      }
+    } catch (err) {
+      setLocalAuthError(
+        (err as { name?: string })?.name === "UsernameExistsException"
+          ? "An account with that email already exists."
+          : (err as { name?: string })?.name === "NotAuthorizedException"
+          ? "Incorrect email or password."
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const fields: { name: FieldName; label: string; autoComplete: string }[] = [
     { name: "email", label: "Email address", autoComplete: "email" },
     {
       name: "password",
-      label: "Password",
+      label: awaitingConfirmation ? "Confirmation code" : "Password",
       autoComplete: isSignUp ? "new-password" : "current-password",
     },
-    ...(isSignUp
+    ...(isSignUp && !awaitingConfirmation
       ? [{ name: "confirmPassword" as const, label: "Confirm password", autoComplete: "new-password" }]
       : []),
   ];
@@ -98,6 +174,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           onSubmit={handleSubmit}
           onChange={(event) => {
             setNotice("");
+            setLocalAuthError("")
             setValidationSummary((current) => ({ ...current, message: "" }));
             const nextErrors = validate(event.currentTarget);
             setErrors((currentErrors) => {
@@ -138,14 +215,20 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           ))}
 
           <div aria-live="polite" aria-atomic="true">
-            {authenticationError && (
-              <p role="alert" className={styles.error}>{authenticationError}</p>
+            {displayedError && (
+              <p role="alert" className={styles.error}>{displayedError}</p>
             )}
             {notice && <p className={styles.notice}>{notice}</p>}
           </div>
 
-          <button type="submit" className={styles.submit}>
-            {isSignUp ? "Create account" : "Sign in"}
+          <button type="submit" className={styles.submit} disabled={submitting}>
+            {submitting
+            ? "Please wait..."
+            : awaitingConfirmation ?
+            "Confirm"
+            : isSignUp ? 
+            "Create account" : 
+            "Sign in"}
           </button>
         </form>
 
