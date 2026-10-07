@@ -76,7 +76,7 @@ class AuthConstruct(Construct):
         # App Client
         self.app_client = cognito.CfnUserPoolClient(
             self,
-            "CognitoUserPoolClient",
+            "CognitoUserPoolClientSPA",
             user_pool_id=self.user_pool.ref,
             client_name="nomad_incubator_SPA",
             generate_secret = False,
