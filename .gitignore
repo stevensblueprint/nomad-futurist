@@ -1,5 +1,6 @@
 # Next.js
 .next/
+frontend/.next/
 out/
 
 # Node
@@ -7,6 +8,7 @@ node_modules/
 
 # Python
 .venv/
+venv/
 __pycache__/
 *.py[cod]
 
