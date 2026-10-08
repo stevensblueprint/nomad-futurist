@@ -1,0 +1,124 @@
+---
+Metadata:
+  AWSToolsMetrics:
+    IaC_Generator: "arn:aws:cloudformation:us-east-1:904233098281:generatedTemplate/a1af6453-5784-430b-a8cf-18a0eabfe7c3"
+Resources:
+  RDSDBInstance:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::RDS::DBInstance"
+    DeletionPolicy: "Retain"
+    Properties:
+      DatabaseInsightsMode: "standard"
+      StorageEncrypted: true
+      Port: "5432"
+      StorageThroughput: 125
+      PreferredBackupWindow: "07:05-07:35"
+      MonitoringInterval: 0
+      DBParameterGroupName: "default.postgres18"
+      NetworkType: "IPV4"
+      DedicatedLogVolume: false
+      CopyTagsToSnapshot: true
+      MultiAZ: false
+      Engine: "postgres"
+      PerformanceInsightsKMSKeyId: "arn:aws:kms:us-east-1:904233098281:key/8b620fc4-d954-478f-9098-b36f642e6b7d"
+      EngineLifecycleSupport: "open-source-rds-extended-support-disabled"
+      LicenseModel: "postgresql-license"
+      EngineVersion: "18.3"
+      StorageType: "gp3"
+      KmsKeyId: "arn:aws:kms:us-east-1:904233098281:key/8b620fc4-d954-478f-9098-b36f642e6b7d"
+      DBInstanceClass: "db.t4g.micro"
+      PerformanceInsightsRetentionPeriod: 7
+      OptionGroupName: "default:postgres-18"
+      PreferredMaintenanceWindow: "sat:04:30-sat:05:00"
+      EnablePerformanceInsights: true
+      AutoMinorVersionUpgrade: true
+      DBSubnetGroupName: "nomad-db-subnet-group"
+      DeletionProtection: true
+      Iops: 3000
+      DBInstanceIdentifier: "db-nomad"
+      AllocatedStorage: "20"
+      BackupTarget: "region"
+      CACertificateIdentifier: "rds-ca-rsa2048-g1"
+      ManageMasterUserPassword: false
+      VPCSecurityGroups:
+      - "sg-0b0e91786528e3f12"
+      MasterUsername: "nomad"
+      MaxAllocatedStorage: 1000
+      EnableIAMDatabaseAuthentication: false
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 14
+      EnableCloudwatchLogsExports: []
+  EC2VPC:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::EC2::VPC"
+    DeletionPolicy: "Retain"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      InstanceTenancy: "default"
+      EnableDnsHostnames: true
+      Tags:
+      - Value: "nomad-vpc"
+        Key: "Name"
+  RDSDBSubnetGroupNomaddbsubnetgroup:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::RDS::DBSubnetGroup"
+    DeletionPolicy: "Retain"
+    Properties:
+      DBSubnetGroupDescription: "Private subnet group for Nomad development PostgreSQL"
+      SubnetIds:
+      - "subnet-0855eb3b6313a0b17"
+      - "subnet-0b2ac62812d715782"
+      DBSubnetGroupName: "nomad-db-subnet-group"
+  EC2Subnet:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::EC2::Subnet"
+    DeletionPolicy: "Retain"
+    Properties:
+      MapPublicIpOnLaunch: false
+      EnableDns64: false
+      VpcId: "vpc-0a87c06973c80eb39"
+      AvailabilityZoneId: "use1-az2"
+      PrivateDnsNameOptionsOnLaunch:
+        EnableResourceNameDnsARecord: false
+        HostnameType: "ip-name"
+        EnableResourceNameDnsAAAARecord: false
+      CidrBlock: "10.0.1.0/24"
+      Ipv6Native: false
+      Tags:
+      - Value: "nomad-private-a"
+        Key: "Name"
+  EC2SecurityGroup:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::EC2::SecurityGroup"
+    DeletionPolicy: "Retain"
+    Properties:
+      GroupDescription: "Created by RDS management console"
+      GroupName: "nomad-rds-sg"
+      VpcId: "vpc-0a87c06973c80eb39"
+      SecurityGroupIngress:
+      - CidrIp: "155.246.151.34/32"
+        IpProtocol: "tcp"
+        FromPort: 5432
+        ToPort: 5432
+      SecurityGroupEgress:
+      - CidrIp: "0.0.0.0/0"
+        IpProtocol: "-1"
+  EC2SubnetDJ:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::EC2::Subnet"
+    DeletionPolicy: "Retain"
+    Properties:
+      MapPublicIpOnLaunch: false
+      EnableDns64: false
+      VpcId: "vpc-0a87c06973c80eb39"
+      AvailabilityZoneId: "use1-az4"
+      PrivateDnsNameOptionsOnLaunch:
+        EnableResourceNameDnsARecord: false
+        HostnameType: "ip-name"
+        EnableResourceNameDnsAAAARecord: false
+      CidrBlock: "10.0.2.0/24"
+      Ipv6Native: false
+      Tags:
+      - Value: "nomad-private-b"
+        Key: "Name"
