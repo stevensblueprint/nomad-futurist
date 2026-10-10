@@ -14,8 +14,13 @@ class NomadStack(cdk.Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # Instantiate application infrastructure constructs
-        api = ApiConstruct(self, "Api")
         auth = AuthConstruct(self, "Auth")
+        api = ApiConstruct(
+            self,
+            "Api",
+            user_pool_id=auth.user_pool.ref,
+            admin_user_provisioning_lambda=auth.admin_user_provisioning_lambda,
+        )
         database = DatabaseConstruct(self, "Database")
         notification = NotificationConstruct(self, "Notification")
         storage = StorageConstruct(self, "Storage")

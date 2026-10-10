@@ -1,5 +1,7 @@
 import aws_cdk as cdk
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as lambda_
 from constructs import Construct
 from aws_cdk import aws_ses as ses
 
@@ -119,6 +121,26 @@ class AuthConstruct(Construct):
             )
             self._retain(group)
             self.groups.append(group)
+
+        self.admin_user_provisioning_lambda = lambda_.Function(
+            self,
+            "AdminUserProvisioningLambda",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="main.handler",
+            code=lambda_.Code.from_asset("functions/admin_user_provisioning"),
+            environment={"USER_POOL_ID": self.user_pool.ref},
+        )
+        self.admin_user_provisioning_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "cognito-idp:AdminCreateUser",
+                    "cognito-idp:AdminAddUserToGroup",
+                    "cognito-idp:AdminSetUserMFAPreference",
+                    "cognito-idp:AdminDeleteUser",
+                ],
+                resources=[self.user_pool.attr_arn],
+            )
+        )
 
         cdk.CfnOutput(
             self,
