@@ -3,33 +3,8 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
-;
-import { Amplify } from 'aws-amplify';
-import { signUp, confirmSignUp, signIn } from "aws-amplify/auth";
-
-Amplify.configure({
-  Auth: {
-    Cognito: {
-      userPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID!,
-      userPoolClientId: process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID!,
-
-      loginWith: {
-        email: true
-      },
-      signUpVerificationMethod: 'code',
-      userAttributes: {
-        email: { required: true }
-      },
-      passwordFormat: {
-        minLength: 8,
-        requireLowercase: true,
-        requireUppercase: true,
-        requireNumbers: true,
-        requireSpecialCharacters: true
-      }
-    }
-  }
-});
+import "./amplify-config";
+import { confirmSignUp, fetchAuthSession, signIn, signUp } from "aws-amplify/auth";
 type FieldName = "email" | "password" | "confirmPassword";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
@@ -50,6 +25,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [founderLink, setFounderLink] = useState(false);
   const displayedError = localAuthError || authenticationError;
 
   function validate(form: HTMLFormElement): FieldErrors {
@@ -129,8 +105,20 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           setNotice("Check your email for a confirmation code.");
         }
       } else {
-        await signIn({ username: email, password });
-        setNotice("Signed in.");
+        const result = await signIn({ username: email, password });
+        if (result.isSignedIn) {
+          const session = await fetchAuthSession();
+          const groups = session.tokens?.idToken?.payload["cognito:groups"];
+          const isFounder = Array.isArray(groups) && groups.includes("Founders");
+          setFounderLink(isFounder);
+          setNotice(
+            isFounder
+              ? "Signed in. Register your project when you’re ready."
+              : "Signed in."
+          );
+        } else {
+          setNotice("Complete the sign-in steps to continue.");
+        }
       }
     } catch (err) {
       setLocalAuthError(
@@ -174,6 +162,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           onSubmit={handleSubmit}
           onChange={(event) => {
             setNotice("");
+            setFounderLink(false);
             setLocalAuthError("")
             setValidationSummary((current) => ({ ...current, message: "" }));
             const nextErrors = validate(event.currentTarget);
@@ -219,6 +208,9 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
               <p role="alert" className={styles.error}>{displayedError}</p>
             )}
             {notice && <p className={styles.notice}>{notice}</p>}
+            {founderLink && (
+              <Link href="/register-project">Register your project</Link>
+            )}
           </div>
 
           <button type="submit" className={styles.submit} disabled={submitting}>

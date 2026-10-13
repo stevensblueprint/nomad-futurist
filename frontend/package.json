@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:registration": "node --test app/registration/registration-utils.test.mjs"
   },
   "dependencies": {
     "@aws-amplify/ui-react": "^6.15.6",
