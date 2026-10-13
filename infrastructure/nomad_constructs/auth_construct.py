@@ -1,20 +1,30 @@
-import aws_cdk as cdk
-from aws_cdk import aws_cognito as cognito
-from constructs import Construct
-from aws_cdk import aws_ses as ses
+from pathlib import Path
 
-	
+import aws_cdk as cdk
+from aws_cdk import (
+    aws_cognito as cognito,
+    aws_iam as iam,
+    aws_lambda as lambda_,
+    aws_ses as ses,
+    aws_logs as logs,
+)
+from constructs import Construct
+
+
+FUNCTIONS_ROOT = Path(__file__).resolve().parent.parent / "functions"
             
+
 class AuthConstruct(Construct):
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
-        # Cognito User Pool
+        
         sender_email = "eli6@stevens.edu"
         self.ses_identity = ses.EmailIdentity(
             self, "AuthEmailIdentity", 
-            identity= ses.Identity.email(sender_email)
+            identity=ses.Identity.email(sender_email)
         )
 
+        
         self.user_pool = cognito.CfnUserPool(
             self,
             "CognitoUserPool",
@@ -65,29 +75,24 @@ class AuthConstruct(Construct):
                     ),
                 ]
             ),
-            email_configuration= cognito.CfnUserPool.EmailConfigurationProperty(
+            email_configuration = cognito.CfnUserPool.EmailConfigurationProperty(
                 email_sending_account="DEVELOPER",
-                source_arn = self.ses_identity.email_identity_arn,
+                source_arn=self.ses_identity.email_identity_arn,
                 from_=f"Nomad Incubator <{sender_email}>"
             )
         )
         self.user_pool.node.add_dependency(self.ses_identity)
         self._retain(self.user_pool)
-        # App Client
+        
+        
         self.app_client = cognito.CfnUserPoolClient(
             self,
             "CognitoUserPoolClientSPA",
             user_pool_id=self.user_pool.ref,
             client_name="nomad_incubator_SPA",
-            generate_secret = False,
-            callback_ur_ls=["https://d84l1y8p4kdic.cloudfront.net"],
-            allowed_o_auth_flows_user_pool_client=True,
-            allowed_o_auth_flows=["code"],
-            allowed_o_auth_scopes=["email", "openid", "phone"],
-            supported_identity_providers=["COGNITO"],
+            generate_secret=False,
             explicit_auth_flows=[
                 "ALLOW_REFRESH_TOKEN_AUTH",
-                "ALLOW_USER_AUTH",
                 "ALLOW_USER_SRP_AUTH",
             ],
             access_token_validity=60,
@@ -103,7 +108,8 @@ class AuthConstruct(Construct):
             enable_token_revocation=True,
         )
         self._retain(self.app_client)
-        # User Groups
+        
+        
         self.groups = []
         for logical_id, group_name in (
             ("CognitoUserPoolGroupFounders", "Founders"),
@@ -119,6 +125,42 @@ class AuthConstruct(Construct):
             )
             self._retain(group)
             self.groups.append(group)
+
+
+        admin_user_provisioning_log_group = logs.LogGroup(
+            self,
+            "AdminUserProvisioningLambdaLogGroup",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+        )
+
+        self.admin_user_provisioning_lambda = lambda_.Function(
+            self,
+            "AdminUserProvisioningLambda",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="main.handler",
+            code=lambda_.Code.from_asset(
+                str(FUNCTIONS_ROOT / "admin_user_provisioning")
+            ),            
+            environment={"USER_POOL_ID": self.user_pool.ref},
+            memory_size=256,
+            timeout=cdk.Duration.seconds(10),
+            architecture=lambda_.Architecture.ARM_64,
+            log_group=admin_user_provisioning_log_group,
+        )
+        self.admin_user_provisioning_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "cognito-idp:AdminCreateUser",
+                    "cognito-idp:AdminAddUserToGroup",
+                    "cognito-idp:AdminSetUserMFAPreference",
+                    "cognito-idp:AdminDeleteUser",
+                ],
+                resources=[self.user_pool.attr_arn],
+            )
+        )
+        
+
 
         cdk.CfnOutput(
             self,

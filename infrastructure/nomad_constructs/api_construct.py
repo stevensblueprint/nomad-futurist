@@ -1,5 +1,3 @@
-"""API Gateway and Lambda infrastructure for Project Registration and Validation."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,47 +5,43 @@ from pathlib import Path
 import aws_cdk as cdk
 from aws_cdk import (
     aws_apigateway as apigw,
+    aws_cognito as cognito,
     aws_iam as iam,
     aws_lambda as lambda_,
     aws_logs as logs,
 )
 from constructs import Construct
 
+
 FUNCTIONS_ROOT = Path(__file__).resolve().parent.parent / "functions"
 
 
 class ApiConstruct(Construct):
-    def __init__(self, scope: Construct, construct_id: str) -> None:
+    def __init__(self, scope: Construct, construct_id: str, *, user_pool_id: str, admin_user_provisioning_lambda: lambda_.IFunction,) -> None:
         super().__init__(scope, construct_id)
-
-        ### IAM Roles for Lambda functions ###
-        # Project Registration Lambda execution role
+        
         registration_lambda_role = iam.Role(
             self,
             "RegistrationLambdaExecutionRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
         )
-
         registration_lambda_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name(
                 "service-role/AWSLambdaBasicExecutionRole"  # Cloudwatch logs permissions
             )
         )
 
-        # Project Validation Lambda execution role
         validation_lambda_role = iam.Role(
             self,
             "ValidationLambdaExecutionRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
         )
-
         validation_lambda_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name(
                 "service-role/AWSLambdaBasicExecutionRole"
             )
         )
 
-        ### Lambda log groups ###
         registration_log_group = logs.LogGroup(
             self,
             "ProjectRegistrationLambdaLogGroup",
@@ -61,8 +55,6 @@ class ApiConstruct(Construct):
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
 
-        ### Lambda functions ###
-        # Project Registration Lambda
         registration_lambda = lambda_.Function(
             self,
             "ProjectRegistrationLambda",
@@ -81,7 +73,6 @@ class ApiConstruct(Construct):
             log_group=registration_log_group,
         )
 
-        # Project Validation Lambda
         validation_lambda = lambda_.Function(
             self,
             "ProjectValidationLambda",
@@ -100,7 +91,6 @@ class ApiConstruct(Construct):
             log_group=validation_log_group,
         )
 
-        ### API Gateway ###
         access_log_group = logs.LogGroup(
             self,
             "ProjectApiAccessLogs",
@@ -108,11 +98,12 @@ class ApiConstruct(Construct):
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
 
+
         api = apigw.RestApi(
             self,
             "ProjectApi",
             rest_api_name="nomad-project-api",
-            description="Project Registration and Validation API",
+            description="Nomad Application API",
             deploy_options=apigw.StageOptions(
                 stage_name="dev",
                 tracing_enabled=True,
@@ -152,14 +143,27 @@ class ApiConstruct(Construct):
             cloud_watch_role=True,
         )
 
+        user_pool = cognito.UserPool.from_user_pool_id(
+            self, "ExistingUserPool", user_pool_id
+        )
+        authorizer = apigw.CognitoUserPoolsAuthorizer(
+            self, "CognitoAuthorizer", cognito_user_pools=[user_pool],
+        )
+
         registration_integration = apigw.LambdaIntegration(
-            registration_lambda,
-            proxy=True,
+            registration_lambda, proxy=True,
         )
         validation_integration = apigw.LambdaIntegration(
-            validation_lambda,
-            proxy=True,
+            validation_lambda, proxy=True,
         )
+        admin_user_provisioning_integration = apigw.LambdaIntegration(
+            admin_user_provisioning_lambda, proxy=True,
+        )
+
+        # Admin User Provisioning routes -> AdminUserProvisioningLambda
+        admin = api.root.add_resource("admin")
+        users = admin.add_resource("users")
+        users.add_method("POST", admin_user_provisioning_integration, authorization_type=apigw.AuthorizationType.COGNITO, authorizer=authorizer,)
 
         # Project Registration routes -> ProjectRegistrationLambda
         projects = api.root.add_resource("projects")
@@ -182,9 +186,10 @@ class ApiConstruct(Construct):
         validation_project_by_id.add_method("GET", validation_integration)
         validation_project_by_id.add_method("PATCH", validation_integration)
 
+
         cdk.CfnOutput(
             self,
             "ProjectApiUrl",
             value=api.url,
-            description="Base URL for the Project Registration and Validation API",
+            description="Base URL for Nomad Application API",
         )
