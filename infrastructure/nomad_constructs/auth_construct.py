@@ -8,6 +8,7 @@ from aws_cdk import aws_ses as ses
 class AuthConstruct(Construct):
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
+        
         # Cognito User Pool
         sender_email = "eli6@stevens.edu"
         self.ses_identity = ses.EmailIdentity(
@@ -73,6 +74,7 @@ class AuthConstruct(Construct):
         )
         self.user_pool.node.add_dependency(self.ses_identity)
         self._retain(self.user_pool)
+        
         # App Client
         self.app_client = cognito.CfnUserPoolClient(
             self,
@@ -80,14 +82,8 @@ class AuthConstruct(Construct):
             user_pool_id=self.user_pool.ref,
             client_name="nomad_incubator_SPA",
             generate_secret = False,
-            callback_ur_ls=["https://d84l1y8p4kdic.cloudfront.net"],
-            allowed_o_auth_flows_user_pool_client=True,
-            allowed_o_auth_flows=["code"],
-            allowed_o_auth_scopes=["email", "openid", "phone"],
-            supported_identity_providers=["COGNITO"],
             explicit_auth_flows=[
                 "ALLOW_REFRESH_TOKEN_AUTH",
-                "ALLOW_USER_AUTH",
                 "ALLOW_USER_SRP_AUTH",
             ],
             access_token_validity=60,
@@ -103,6 +99,7 @@ class AuthConstruct(Construct):
             enable_token_revocation=True,
         )
         self._retain(self.app_client)
+        
         # User Groups
         self.groups = []
         for logical_id, group_name in (
