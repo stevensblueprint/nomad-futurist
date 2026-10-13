@@ -150,6 +150,21 @@ class ApiConstruct(Construct):
             self, "CognitoAuthorizer", cognito_user_pools=[user_pool],
         )
 
+        # Errors rejected by API Gateway never reach the Lambda's CORS headers.
+        for response_id, response_type in (
+            ("DefaultClientError", apigw.ResponseType.DEFAULT_4_XX),
+            ("DefaultServerError", apigw.ResponseType.DEFAULT_5_XX),
+        ):
+            api.add_gateway_response(
+                response_id,
+                type=response_type,
+                response_headers={
+                    "Access-Control-Allow-Origin": "'http://localhost:3000'",
+                    "Access-Control-Allow-Headers": "'Content-Type,Authorization'",
+                    "Access-Control-Allow-Methods": "'GET,POST,PATCH,OPTIONS'",
+                },
+            )
+
         registration_integration = apigw.LambdaIntegration(
             registration_lambda, proxy=True,
         )
@@ -167,7 +182,11 @@ class ApiConstruct(Construct):
 
         # Project Registration routes -> ProjectRegistrationLambda
         projects = api.root.add_resource("projects")
-        projects.add_method("POST", registration_integration)
+        projects.add_method(
+            "POST", registration_integration,
+            authorization_type=apigw.AuthorizationType.COGNITO,
+            authorizer=authorizer,
+        )
         projects.add_method("GET", registration_integration)
 
         project_by_id = projects.add_resource("{projectId}")

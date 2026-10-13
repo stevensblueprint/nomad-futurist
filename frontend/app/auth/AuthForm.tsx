@@ -1,36 +1,11 @@
 "use client";
 
-
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
-import { useRouter } from 'next/navigation'
-import { Amplify } from 'aws-amplify';
-import { signUp, confirmSignUp, signIn, autoSignIn } from "aws-amplify/auth";
-
-Amplify.configure({
-  Auth: {
-    Cognito: {
-      userPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID!,
-      userPoolClientId: process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID!,
-
-      loginWith: {
-        email: true
-      },
-      signUpVerificationMethod: 'code',
-      userAttributes: {
-        email: { required: true }
-      },
-      passwordFormat: {
-        minLength: 8,
-        requireLowercase: true,
-        requireUppercase: true,
-        requireNumbers: true,
-        requireSpecialCharacters: true
-      }
-    }
-  }
-});
+import "./amplify-config";
+import { autoSignIn, confirmSignUp, fetchAuthSession, signIn, signUp } from "aws-amplify/auth";
 type FieldName = "email" | "password" | "confirmPassword";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
@@ -41,7 +16,6 @@ type AuthFormProps = {
 
 export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
   const router = useRouter();
-
   const isSignUp = mode === "sign-up";
   const [errors, setErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState("");
@@ -53,6 +27,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [founderLink, setFounderLink] = useState(false);
   const displayedError = localAuthError || authenticationError;
 
   function validate(form: HTMLFormElement): FieldErrors {
@@ -78,49 +53,37 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
 
     return nextErrors;
   }
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    let confirmationSucceeded = false;
     if (awaitingConfirmation) {
       const code = String(new FormData(form).get("password") ?? "").trim();
       setSubmitting(true);
       setLocalAuthError("");
       try {
         await confirmSignUp({ username: pendingEmail, confirmationCode: code });
-        confirmationSucceeded = true;
-      } catch (err: any) {
-        setLocalAuthError(err?.message || "That confirmation code is incorrect.");
-
-        setSubmitting(false);
-        return;
-      }
-
-      if (confirmationSucceeded) {
+        setAwaitingConfirmation(false);
         try {
           const { isSignedIn } = await autoSignIn();
-          if (isSignedIn) {
-            router.push('/registration');
-          } else {
-            router.push('/sign-in');
-          }
+          router.push(isSignedIn ? "/registration" : "/sign-in");
         } catch {
-          setLocalAuthError("Account verified! Redirecting to sign in...");
-          setTimeout(() => {
-            router.push('/signin');
-          }, 2000);
-        } finally {
-          setSubmitting(false);
+          router.push("/sign-in");
         }
+      } catch (error: unknown) {
+        setLocalAuthError(
+          error instanceof Error ? error.message : "That confirmation code is incorrect."
+        );
+      } finally {
+        setSubmitting(false);
       }
       return;
     }
 
-
+   
     const nextErrors = validate(form);
 
     setErrors(nextErrors);
-    setNotice("");
+        setNotice("");
     setValidationSummary((current) => ({
       message: Object.values(nextErrors).join(" "),
       submission: current.submission + 1,
@@ -128,25 +91,22 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
 
     const firstInvalidField = Object.keys(nextErrors)[0];
     if (firstInvalidField) {
-      (form.elements.namedItem(firstInvalidField) as HTMLInputElement | null)?.focus();
+      (form.elements.namedItem(firstInvalidField) as HTMLInputElement).focus();
       return;
     }
 
     const data = new FormData(form);
     const email = String(data.get("email") ?? "").trim();
     const password = String(data.get("password") ?? "");
-
-
+    
+   
     setSubmitting(true);
     try {
       if (isSignUp) {
         const { isSignUpComplete, nextStep } = await signUp({
           username: email,
           password,
-          options: {
-            userAttributes: { email },
-            autoSignIn: true,
-          },
+          options: { userAttributes: { email }, autoSignIn: true },
         });
         if (!isSignUpComplete && nextStep.signUpStep === "CONFIRM_SIGN_UP") {
           setPendingEmail(email);
@@ -154,16 +114,28 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           setNotice("Check your email for a confirmation code.");
         }
       } else {
-        await signIn({ username: email, password });
-        setNotice("Signed in.");
+        const result = await signIn({ username: email, password });
+        if (result.isSignedIn) {
+          const session = await fetchAuthSession();
+          const groups = session.tokens?.idToken?.payload["cognito:groups"];
+          const isFounder = Array.isArray(groups) && groups.includes("Founders");
+          setFounderLink(isFounder);
+          setNotice(
+            isFounder
+              ? "Signed in. Register your project when you’re ready."
+              : "Signed in."
+          );
+        } else {
+          setNotice("Complete the sign-in steps to continue.");
+        }
       }
     } catch (err) {
       setLocalAuthError(
         (err as { name?: string })?.name === "UsernameExistsException"
           ? "An account with that email already exists."
           : (err as { name?: string })?.name === "NotAuthorizedException"
-            ? "Incorrect email or password."
-            : "Something went wrong. Please try again."
+          ? "Incorrect email or password."
+          : "Something went wrong. Please try again."
       );
     } finally {
       setSubmitting(false);
@@ -199,6 +171,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           onSubmit={handleSubmit}
           onChange={(event) => {
             setNotice("");
+            setFounderLink(false);
             setLocalAuthError("")
             setValidationSummary((current) => ({ ...current, message: "" }));
             const nextErrors = validate(event.currentTarget);
@@ -244,16 +217,19 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
               <p role="alert" className={styles.error}>{displayedError}</p>
             )}
             {notice && <p className={styles.notice}>{notice}</p>}
+            {founderLink && (
+              <Link href="/register-project">Register your project</Link>
+            )}
           </div>
 
           <button type="submit" className={styles.submit} disabled={submitting}>
             {submitting
-              ? "Please wait..."
-              : awaitingConfirmation ?
-                "Confirm"
-                : isSignUp ?
-                  "Create account" :
-                  "Sign in"}
+            ? "Please wait..."
+            : awaitingConfirmation ?
+            "Confirm"
+            : isSignUp ? 
+            "Create account" : 
+            "Sign in"}
           </button>
         </form>
 
