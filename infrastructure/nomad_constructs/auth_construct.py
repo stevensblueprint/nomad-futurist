@@ -18,6 +18,7 @@ class AuthConstruct(Construct):
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
         
+        # Cognito User Pool
         sender_email = "eli6@stevens.edu"
         self.ses_identity = ses.EmailIdentity(
             self, "AuthEmailIdentity", 
@@ -84,13 +85,13 @@ class AuthConstruct(Construct):
         self.user_pool.node.add_dependency(self.ses_identity)
         self._retain(self.user_pool)
         
-        
+        # App Client
         self.app_client = cognito.CfnUserPoolClient(
             self,
             "CognitoUserPoolClientSPA",
             user_pool_id=self.user_pool.ref,
             client_name="nomad_incubator_SPA",
-            generate_secret=False,
+            generate_secret = False,
             explicit_auth_flows=[
                 "ALLOW_REFRESH_TOKEN_AUTH",
                 "ALLOW_USER_SRP_AUTH",
@@ -109,7 +110,7 @@ class AuthConstruct(Construct):
         )
         self._retain(self.app_client)
         
-        
+        # User Groups
         self.groups = []
         for logical_id, group_name in (
             ("CognitoUserPoolGroupFounders", "Founders"),
