@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test:registration": "node --test app/registration/registration-utils.test.mjs",
-    "test:auth": "node --test app/auth/authLogic.test.mjs"
+    "test:auth": "node --test app/auth/authLogic.test.mjs",
+    "test:validation": "vitest run app/validation",
+    "test": "npm run test:registration && npm run test:auth && npm run test:validation"
   },
   "dependencies": {
     "@aws-amplify/ui-react": "^6.15.6",
@@ -18,13 +20,18 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
+    "jsdom": "^26.1.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

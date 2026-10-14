@@ -8,7 +8,7 @@ import uuid
 from unittest.mock import patch
 
 
-MODULE_PATH = pathlib.Path(__file__).parents[1] / "functions" / "registration-lambda" / "main.py"
+MODULE_PATH = pathlib.Path(__file__).parents[1] / "functions" / "registration" / "main.py"
 SPEC = importlib.util.spec_from_file_location("registration_lambda", MODULE_PATH)
 registration = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(registration)
