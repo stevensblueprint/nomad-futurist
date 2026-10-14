@@ -28,7 +28,9 @@ Open `http://localhost:3001/sign-in`. Sign in again because browser authenticati
 
 ## Access and navigation
 
-After completed sign-in, Founder members see a “Register your project” link. There is no automatic redirect. Direct visits to the form check the session; signed-out visitors go to sign-in and non-Founders see an access-denied page. API Gateway validates authentication for project creation, and the registration Lambda checks the trusted authorizer group claim.
+After sign-in completes, users go to `/`. The home page checks their session and shows a plain "Register your project" button only to Founder members. The button opens `/register-project`. Failed or incomplete sign-in stays on the sign-in page.
+
+Direct visits to the form check the session; signed-out visitors go to sign-in and non-Founders see an access-denied page. API Gateway validates authentication for project creation, and the registration Lambda checks the trusted authorizer group claim.
 
 Self-signup does not assign the `Founders` group. Automatic group assignment is outside issue #27; accounts must receive that membership elsewhere before registration is available.
 
@@ -130,4 +132,9 @@ No PR is created as part of this implementation request. When preparing one:
 
 - Explain that `/register-project` follows the acceptance criteria while the issue's workflow names `/registration`, and ask the issue author to confirm the route.
 - Explain the Founder membership dependency and ask where self-signup group assignment will be handled. It remains outside this change.
+- Describe the home-page redirect after completed sign-in and the plain Founder-only registration button. This follows the user's updated navigation preference and does not add a Project Dashboard or project lookup.
 - Include the example request/response above and the completed validation results, distinguishing local checks from deployed integration checks.
+
+## Home-page navigation validation
+
+Frontend lint, TypeScript checks, and the Webpack production build passed after moving registration navigation to the home page. A local browser test with mocked Cognito responses confirmed completed sign-in redirects to `/`, the Founder button opens `/register-project`, and signed-out users and non-Founders do not see the button. This navigation change does not change AWS infrastructure.
