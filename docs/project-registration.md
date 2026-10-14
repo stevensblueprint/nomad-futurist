@@ -28,7 +28,7 @@ Open `http://localhost:3001/sign-in`. Sign in again because browser authenticati
 
 ## Access and navigation
 
-After sign-in completes, users go to `/`. The home page checks their session and shows a plain "Register your project" button only to Founder members. The button opens `/register-project`. Failed or incomplete sign-in stays on the sign-in page.
+After sign-in completes, users go to `/`. The home page checks their session and shows a simple "Register your project" button only to Founder members. The button opens `/register-project`. Failed or incomplete sign-in stays on the sign-in page.
 
 Direct visits to the form check the session; signed-out visitors go to sign-in and non-Founders see an access-denied page. API Gateway validates authentication for project creation, and the registration Lambda checks the trusted authorizer group claim.
 
@@ -132,7 +132,7 @@ No PR is created as part of this implementation request. When preparing one:
 
 - Explain that `/register-project` follows the acceptance criteria while the issue's workflow names `/registration`, and ask the issue author to confirm the route.
 - Explain the Founder membership dependency and ask where self-signup group assignment will be handled. It remains outside this change.
-- Describe the home-page redirect after completed sign-in and the plain Founder-only registration button. This follows the user's updated navigation preference and does not add a Project Dashboard or project lookup.
+- Describe the home-page redirect after completed sign-in and the Founder-only registration button. This follows the user's updated navigation preference and does not add a Project Dashboard or project lookup.
 - Include the example request/response above and the completed validation results, distinguishing local checks from deployed integration checks.
 
 ## Home-page navigation validation
