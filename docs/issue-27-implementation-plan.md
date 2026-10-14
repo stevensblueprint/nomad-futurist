@@ -13,7 +13,7 @@ This plan has been implemented on `feat/issue-27-project-registration`. See [pro
 - Use `/register-project`. Do not add a `/registration` alias. The issue uses `/registration` in its workflow but `/register-project` in its acceptance criteria. Explain the choice in the PR and ask the issue author to confirm it.
 - Require Cognito `Founders` membership to access the form and invoke `POST /projects`. Enforce access in the frontend and backend.
 - Do not implement automatic Founder group assignment. The existing self-signup flow does not assign this group; assignment must be handled elsewhere. Explain this dependency and request clarification in the PR.
-- Redirect users to `/` after completed sign-in. Show a plain "Register your project" button on the home page only for authenticated Founders.
+- Redirect users to `/` after completed sign-in. Show a simple "Register your project" button on the home page only for authenticated Founders.
 - Require project name, description, support type, and requested assistance (`needs`). Keep the project/company URL optional.
 - For `human_capital`, hide funding inputs and send `fundingRange: null`. For `funding` or `both`, require minimum and maximum funding values in USD. Accept finite, nonnegative numbers with minimum less than or equal to maximum.
 - Show a vision-document placeholder and send `visionDocument: null`. Do not implement upload or storage.
@@ -134,7 +134,7 @@ Use a documented error shape such as `{ "message": "Invalid registration request
 ## Completion criteria
 
 - `/register-project` renders the minimal form for authenticated Founder members.
-- Completed sign-in redirects to the home page, which exposes a plain registration button only to authenticated Founders.
+- Completed sign-in redirects to the home page, which exposes a simple registration button only to authenticated Founders.
 - Frontend and Lambda implement the same documented contract and validation rules.
 - An authorized valid request returns normalized data, a generated UUID, and draft status with `201`.
 - Invalid payloads return `400`; authenticated non-Founders cannot create projects.

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchAuthSession } from "aws-amplify/auth";
 import "./auth/amplify-config";
+import styles from "./Home.module.css";
 
 type HomeAccess = "checking" | "founder" | "other";
 
@@ -33,13 +34,19 @@ export default function Home() {
   }, []);
 
   return (
-    <main>
-      <h1>Home</h1>
-      {access === "founder" && (
-        <button type="button" onClick={() => router.push("/register-project")}>
-          Register your project
-        </button>
-      )}
+    <main className={styles.page}>
+      <div className={styles.content}>
+        <h1>Home</h1>
+        {access === "founder" && (
+          <button
+            className={styles.registerButton}
+            type="button"
+            onClick={() => router.push("/register-project")}
+          >
+            Register your project
+          </button>
+        )}
+      </div>
     </main>
   );
 }
