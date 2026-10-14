@@ -13,7 +13,7 @@ This plan has been implemented on `feat/issue-27-project-registration`. See [pro
 - Use `/register-project`. Do not add a `/registration` alias. The issue uses `/registration` in its workflow but `/register-project` in its acceptance criteria. Explain the choice in the PR and ask the issue author to confirm it.
 - Require Cognito `Founders` membership to access the form and invoke `POST /projects`. Enforce access in the frontend and backend.
 - Do not implement automatic Founder group assignment. The existing self-signup flow does not assign this group; assignment must be handled elsewhere. Explain this dependency and request clarification in the PR.
-- Show a “Register your project” link to Founders after successful sign-in. Do not automatically redirect them.
+- Redirect users to `/` after completed sign-in. Show a plain "Register your project" button on the home page only for authenticated Founders.
 - Require project name, description, support type, and requested assistance (`needs`). Keep the project/company URL optional.
 - For `human_capital`, hide funding inputs and send `fundingRange: null`. For `funding` or `both`, require minimum and maximum funding values in USD. Accept finite, nonnegative numbers with minimum less than or equal to maximum.
 - Show a vision-document placeholder and send `visionDocument: null`. Do not implement upload or storage.
@@ -82,8 +82,8 @@ Use a documented error shape such as `{ "message": "Invalid registration request
 ### 1. Establish shared authentication configuration
 
 - Extract the existing Amplify configuration from `frontend/app/auth/AuthForm.tsx` into a reusable frontend module so registration can initialize authentication on direct navigation.
-- Check session completion and trusted Cognito group claims before showing the form or Founder link. Redirect unauthenticated form visitors to sign-in and show an access-denied state for authenticated users without Founder membership.
-- Show the registration link only after successful sign-in and confirmed Founder membership; retain the current signup and confirmation flow.
+- Check session completion and trusted Cognito group claims before showing the form or home-page registration button. Redirect unauthenticated form visitors to sign-in and show an access-denied state for authenticated users without Founder membership.
+- Redirect to the home page only after sign-in completes, and show the registration button after confirmed Founder membership. Retain the current signup and confirmation flow.
 - Do not add group provisioning or returning-Founder project lookup.
 
 ### 2. Build the registration page
@@ -125,7 +125,7 @@ Use a documented error shape such as `{ "message": "Invalid registration request
 
 - Add focused Python tests for valid support types, normalized output, generated UUID/draft status, malformed/non-object/missing bodies, required fields, incorrect types, URL validation, funding edge cases, protected/unknown fields, Founder authorization, preserved route stubs, and unsupported routes.
 - Add CDK assertions for Cognito authorization on project creation, retained routes/integrations, CORS configuration, and absence of new registration Lambda resource permissions.
-- Verify the browser workflow: signed-out access, non-Founder access, direct Founder access, post-login link, conditional funding inputs, validation, loading, duplicate-submission prevention, recoverable failures, and successful processing without navigation.
+- Verify the browser workflow: signed-out access, non-Founder access, direct Founder access, completed-sign-in redirect, Founder home-page button, conditional funding inputs, validation, loading, duplicate-submission prevention, recoverable failures, and successful processing without navigation.
 - Run frontend lint/build, the infrastructure Python tests, and `cdk synth`. Review `cdk diff` against the development environment and summarize only expected feature-specific changes.
 - Demonstrate the authenticated form → API Gateway → Lambda → `201` workflow in the development environment when the feature is deployed. Report deployment prerequisites separately if that environment is unavailable.
 - Document the request/response/error contract, environment variable, temporary processing behavior, and example API calls.
@@ -134,7 +134,7 @@ Use a documented error shape such as `{ "message": "Invalid registration request
 ## Completion criteria
 
 - `/register-project` renders the minimal form for authenticated Founder members.
-- Successful sign-in exposes a registration link to Founders without an automatic redirect.
+- Completed sign-in redirects to the home page, which exposes a plain registration button only to authenticated Founders.
 - Frontend and Lambda implement the same documented contract and validation rules.
 - An authorized valid request returns normalized data, a generated UUID, and draft status with `201`.
 - Invalid payloads return `400`; authenticated non-Founders cannot create projects.
