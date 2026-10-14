@@ -1,0 +1,49 @@
+.page {
+  min-height: 100svh;
+  padding: 2rem 1.5rem;
+}
+
+.content {
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+}
+
+.content h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.registerButton {
+  min-height: 2.75rem;
+  padding: 0.75rem 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 30%, var(--background));
+  border-radius: 0.375rem;
+  background: var(--foreground);
+  color: var(--background);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.registerButton:hover {
+  background: color-mix(in srgb, var(--foreground) 85%, var(--background));
+  border-color: color-mix(in srgb, var(--foreground) 45%, var(--background));
+}
+
+.registerButton:active {
+  background: color-mix(in srgb, var(--foreground) 75%, var(--background));
+}
+
+.registerButton:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .registerButton {
+    transition: none;
+  }
+}
