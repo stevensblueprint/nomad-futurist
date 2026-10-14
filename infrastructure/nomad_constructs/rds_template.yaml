@@ -46,7 +46,7 @@ Resources:
       MaxAllocatedStorage: 1000
       EnableIAMDatabaseAuthentication: false
       PubliclyAccessible: false
-      BackupRetentionPeriod: 14
+      BackupRetentionPeriod: 1
       EnableCloudwatchLogsExports: []
   EC2VPC:
     UpdateReplacePolicy: "Retain"
