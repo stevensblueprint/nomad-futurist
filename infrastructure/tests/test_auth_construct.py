@@ -5,6 +5,7 @@ import aws_cdk as cdk
 from aws_cdk import assertions
 from aws_cdk import aws_s3_assets as s3_assets
 
+from nomad_constructs.lambda_asset import PYTHON_CACHE_EXCLUDES
 from stacks.nomad_stack import NomadStack
 
 
@@ -29,6 +30,7 @@ class AuthConstructTest(unittest.TestCase):
                 / "functions"
                 / "admin_user_provisioning"
             ),
+            exclude=list(PYTHON_CACHE_EXCLUDES),
         )
         template = assertions.Template.from_stack(stack)
 

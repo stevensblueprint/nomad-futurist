@@ -11,6 +11,7 @@ from aws_cdk import (
     aws_logs as logs,
 )
 from constructs import Construct
+from nomad_constructs.lambda_asset import python_lambda_code
 
 
 FUNCTIONS_ROOT = Path(__file__).resolve().parent.parent / "functions"
@@ -60,9 +61,7 @@ class ApiConstruct(Construct):
             "ProjectRegistrationLambda",
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="main.handler",
-            code=lambda_.Code.from_asset(
-                str(FUNCTIONS_ROOT / "registration-lambda")
-            ),
+            code=python_lambda_code(FUNCTIONS_ROOT / "registration-lambda"),
             role=registration_lambda_role,
             memory_size=256,
             timeout=cdk.Duration.seconds(10),
@@ -78,9 +77,7 @@ class ApiConstruct(Construct):
             "ProjectValidationLambda",
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="main.handler",
-            code=lambda_.Code.from_asset(
-                str(FUNCTIONS_ROOT / "validation-lambda")
-            ),
+            code=python_lambda_code(FUNCTIONS_ROOT / "validation-lambda"),
             role=validation_lambda_role,
             memory_size=256,
             timeout=cdk.Duration.seconds(10),
