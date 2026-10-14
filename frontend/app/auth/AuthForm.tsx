@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
 import "./amplify-config";
-import { autoSignIn, confirmSignUp, fetchAuthSession, signIn, signUp } from "aws-amplify/auth";
+import { autoSignIn, confirmSignUp, signIn, signUp } from "aws-amplify/auth";
 type FieldName = "email" | "password" | "confirmPassword";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
@@ -28,7 +28,6 @@ export default function AuthForm({ mode, authenticationError, initialNotice}: Au
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [founderLink, setFounderLink] = useState(false);
   const displayedError = localAuthError || authenticationError;
 
   function validate(form: HTMLFormElement): FieldErrors {
@@ -117,15 +116,7 @@ export default function AuthForm({ mode, authenticationError, initialNotice}: Au
       } else {
         const result = await signIn({ username: email, password });
         if (result.isSignedIn) {
-          const session = await fetchAuthSession();
-          const groups = session.tokens?.idToken?.payload["cognito:groups"];
-          const isFounder = Array.isArray(groups) && groups.includes("Founders");
-          setFounderLink(isFounder);
-          setNotice(
-            isFounder
-              ? "Signed in. Register your project when you’re ready."
-              : "Signed in."
-          );
+          router.replace("/");
         } else {
           setNotice("Complete the sign-in steps to continue.");
         }
@@ -172,7 +163,6 @@ export default function AuthForm({ mode, authenticationError, initialNotice}: Au
           onSubmit={handleSubmit}
           onChange={(event) => {
             setNotice("");
-            setFounderLink(false);
             setLocalAuthError("")
             setValidationSummary((current) => ({ ...current, message: "" }));
             const nextErrors = validate(event.currentTarget);
@@ -218,9 +208,6 @@ export default function AuthForm({ mode, authenticationError, initialNotice}: Au
               <p role="alert" className={styles.error}>{displayedError}</p>
             )}
             {notice && <p className={styles.notice}>{notice}</p>}
-            {founderLink && (
-              <Link href="/register-project">Register your project</Link>
-            )}
           </div>
 
           <button type="submit" className={styles.submit} disabled={submitting}>
