@@ -8,7 +8,23 @@ Copy `frontend/.env.example` to `frontend/.env.local` and supply the existing Co
 
 These public environment values are included in the frontend build. Restart development or rebuild after changing them. Never put credentials or tokens in committed environment files.
 
-API and Lambda CORS currently allow `http://localhost:3000`. Configure the intended frontend origin in both places before using a different origin.
+API and registration Lambda CORS default to `http://localhost:3000`. CDK's `frontendOrigin` context configures the preflight, gateway error responses, and registration Lambda response headers together. It accepts one HTTP/HTTPS origin without a path.
+
+To use port 3001, run these commands from `infrastructure/` and review the diff before deployment:
+
+```sh
+npx cdk synth -c frontendOrigin=http://localhost:3001
+npx cdk diff --no-change-set -c frontendOrigin=http://localhost:3001
+npx cdk deploy NomadStack -c frontendOrigin=http://localhost:3001
+```
+
+Then start the frontend from the repository root:
+
+```sh
+npm run dev --workspace=@nomad/frontend -- --port 3001
+```
+
+Open `http://localhost:3001/sign-in`. Sign in again because browser authentication storage is separate for each origin. The API URL in `.env.local` stays the same. Continue supplying the same `frontendOrigin` context on subsequent deployments; omitting it restores port 3000.
 
 ## Access and navigation
 
