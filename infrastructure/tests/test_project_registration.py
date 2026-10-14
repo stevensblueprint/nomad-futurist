@@ -1,6 +1,7 @@
 import base64
 import importlib.util
 import json
+import os
 import pathlib
 import unittest
 import uuid
@@ -62,6 +63,12 @@ class ProjectRegistrationTest(unittest.TestCase):
         first = self.body(self.create())["projectId"]
         second = self.body(self.create())["projectId"]
         self.assertNotEqual(first, second)
+
+    def test_response_cors_origin_uses_configured_lambda_environment(self):
+        with patch.dict(os.environ, {"FRONTEND_ORIGIN": "http://localhost:3001"}):
+            response = registration.handler(self.event(None, body="not-json"), None)
+        self.assertEqual(response["statusCode"], 400)
+        self.assertEqual(response["headers"]["Access-Control-Allow-Origin"], "http://localhost:3001")
 
     @patch.object(registration.uuid, "uuid4", side_effect=RuntimeError("injected failure"))
     def test_unexpected_failure_returns_safe_500_with_cors(self, _uuid4):
