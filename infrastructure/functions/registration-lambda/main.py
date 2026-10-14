@@ -7,6 +7,7 @@ import binascii
 import json
 import logging
 import math
+import os
 import uuid
 from typing import Any
 from urllib.parse import urlsplit
@@ -191,11 +192,12 @@ def _validate(request: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
 
 
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
+    frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000")
     return {
         "statusCode": status_code,
         "headers": {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "http://localhost:3000",
+            "Access-Control-Allow-Origin": frontend_origin,
             "Access-Control-Allow-Headers": "Content-Type,Authorization",
             "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
         },
