@@ -98,6 +98,16 @@ Before deployment, review the development diff: project creation gains the exist
 - The actual Lambda handler returned `201` through a temporary localhost API fixture and the form displayed success. Cognito sessions and API Gateway authorization were mocked for these checks; they do not establish deployed authentication/integration behavior.
 - `cdk diff --no-change-set` could not resolve an AWS account. No deployment or live Cognito/API Gateway end-to-end verification was performed. Those checks remain necessary in the configured development environment.
 
+## Infrastructure reconciliation, October 14, 2026
+
+The first development diff exposed an existing mismatch between this branch and the deployed stack. The deployed stack already manages the RDS database, VPC, subnet group, two subnets, and security group, but this branch's database construct was empty. Deploying it would have detached those retained resources from CloudFormation.
+
+Restored the existing resource definitions from `origin/feat/rds_iac` and verified all six against the deployed template in account `904233098281`, region `us-east-1`. `DatabaseConstruct` now includes them with their deployed logical IDs, properties, and retention policies. This preserves existing stack management without creating or importing another database or changing the network rules. The template describes that existing environment and is not a generic template for creating another database.
+
+Lambda staging now excludes `__pycache__`, `.pyc`, and `.pyo` files. Local test execution had added bytecode to the admin Lambda package and caused an unrelated code-asset change. The clean admin and validation package hashes match the deployed packages.
+
+All 54 infrastructure tests and CDK synthesis passed after these fixes. The read-only development diff no longer contains database/network removals, security-group changes, or an admin Lambda update. It contains only the registration Lambda update, project creation authorization, gateway CORS responses, and API deployment/stage update. No deployment was performed. Live Cognito/API Gateway workflow verification remains pending.
+
 ## Notes for a future PR
 
 No PR is created as part of this implementation request. When preparing one:

@@ -9,6 +9,7 @@ from aws_cdk import (
     aws_logs as logs,
 )
 from constructs import Construct
+from nomad_constructs.lambda_asset import python_lambda_code
 
 
 FUNCTIONS_ROOT = Path(__file__).resolve().parent.parent / "functions"
@@ -139,9 +140,7 @@ class AuthConstruct(Construct):
             "AdminUserProvisioningLambda",
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="main.handler",
-            code=lambda_.Code.from_asset(
-                str(FUNCTIONS_ROOT / "admin_user_provisioning")
-            ),            
+            code=python_lambda_code(FUNCTIONS_ROOT / "admin_user_provisioning"),
             environment={"USER_POOL_ID": self.user_pool.ref},
             memory_size=256,
             timeout=cdk.Duration.seconds(10),
