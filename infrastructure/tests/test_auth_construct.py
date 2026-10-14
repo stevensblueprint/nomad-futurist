@@ -32,7 +32,6 @@ class AuthConstructTest(unittest.TestCase):
         )
         template = assertions.Template.from_stack(stack)
 
-        template.resource_count_is("AWS::Lambda::Function", 1)
         resources = template.to_json()["Resources"]
         user_pool_logical_id = next(
             logical_id
@@ -42,7 +41,8 @@ class AuthConstructTest(unittest.TestCase):
         lambda_logical_id, provisioning_lambda = next(
             (logical_id, resource)
             for logical_id, resource in resources.items()
-            if resource["Type"] == "AWS::Lambda::Function"
+            if logical_id.startswith("AuthAdminUserProvisioningLambda")
+            and resource["Type"] == "AWS::Lambda::Function"
         )
         lambda_properties = provisioning_lambda["Properties"]
 

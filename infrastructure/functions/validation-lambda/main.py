@@ -14,6 +14,24 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     method = event.get("httpMethod")
     resource = event.get("resource")
 
+    if method == "PATCH" and resource == "/validation/projects/{projectId}":
+        try:
+            validation = json.loads(event.get("body"))
+        except (TypeError, json.JSONDecodeError):
+            return _response(400, {"message": "Request body must be a JSON object."})
+
+        if not isinstance(validation, dict):
+            return _response(400, {"message": "Request body must be a JSON object."})
+
+        path_parameters = event.get("pathParameters") or {}
+        return _response(
+            200,
+            {
+                "projectId": path_parameters.get("projectId"),
+                "validation": validation,
+            },
+        )
+
     return _response(
         200,
         {
@@ -29,6 +47,7 @@ def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
         "statusCode": status_code,
         "headers": {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "http://localhost:3000"},
+            "Access-Control-Allow-Origin": "http://localhost:3000",
+        },
         "body": json.dumps(body),
     }
