@@ -1,35 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
-;
-import { Amplify } from 'aws-amplify';
-import { signUp, confirmSignUp, signIn } from "aws-amplify/auth";
-
-Amplify.configure({
-  Auth: {
-    Cognito: {
-      userPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID!,
-      userPoolClientId: process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID!,
-
-      loginWith: {
-        email: true
-      },
-      signUpVerificationMethod: 'code',
-      userAttributes: {
-        email: { required: true }
-      },
-      passwordFormat: {
-        minLength: 8,
-        requireLowercase: true,
-        requireUppercase: true,
-        requireNumbers: true,
-        requireSpecialCharacters: true
-      }
-    }
-  }
-});
+import "./amplify-config";
+import { confirmSignUp, signIn, signUp } from "aws-amplify/auth";
 type FieldName = "email" | "password" | "confirmPassword";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
@@ -39,6 +15,7 @@ type AuthFormProps = {
 };
 
 export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
+  const router = useRouter();
   const isSignUp = mode === "sign-up";
   const [errors, setErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState("");
@@ -129,8 +106,12 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           setNotice("Check your email for a confirmation code.");
         }
       } else {
-        await signIn({ username: email, password });
-        setNotice("Signed in.");
+        const result = await signIn({ username: email, password });
+        if (result.isSignedIn) {
+          router.replace("/");
+        } else {
+          setNotice("Complete the sign-in steps to continue.");
+        }
       }
     } catch (err) {
       setLocalAuthError(
