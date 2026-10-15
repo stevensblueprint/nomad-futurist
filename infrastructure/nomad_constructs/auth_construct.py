@@ -24,7 +24,16 @@ class AuthConstruct(Construct):
             identity=ses.Identity.email(sender_email)
         )
 
-        
+        self.post_confirmation_lambda = lambda_.Function(
+            self,
+            "PostConfirmationLambda",
+            runtime =lambda_.Runtime.PYTHON_3_12,
+            handler = "handler.handler",
+            code=lambda_.Code.from_asset(str(FUNCTIONS_ROOT / "post_confirmation")),
+            description="Assigns newly confirmed founders to the Founders Cognito User Group",
+            timeout=cdk.Duration.seconds(10),
+        )
+
         self.user_pool = cognito.CfnUserPool(
             self,
             "CognitoUserPool",
@@ -79,6 +88,28 @@ class AuthConstruct(Construct):
                 email_sending_account="DEVELOPER",
                 source_arn=self.ses_identity.email_identity_arn,
                 from_=f"Nomad Incubator <{sender_email}>"
+            ),
+            lambda_config = cognito.CfnUserPool.LambdaConfigProperty(
+                post_confirmation=self.post_confirmation_lambda.function_arn,
+            ),
+        )
+
+        self.post_confirmation_lambda.add_permission(
+            "CognitoInvokePostConfirmation", 
+            principal=iam.ServicePrincipal("cognito-idp.amazonaws.com"),
+            source_arn=self.user_pool.attr_arn,
+        )
+
+        self.post_confirmation_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions = ["cognito-idp:AdminAddUserToGroup"],
+                resources=[
+                    cdk.Stack.of(self).format_arn(
+                    service="cognito-idp",
+                    resource="userpool",
+                    resource_name="*",
+                    )
+                ],
             )
         )
         self.user_pool.node.add_dependency(self.ses_identity)

@@ -1,11 +1,12 @@
 "use client";
 
+
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import React, { useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
-;
+import { useRouter } from 'next/navigation'
 import { Amplify } from 'aws-amplify';
-import { signUp, confirmSignUp, signIn } from "aws-amplify/auth";
+import { signUp, confirmSignUp, signIn, autoSignIn } from "aws-amplify/auth";
 
 Amplify.configure({
   Auth: {
@@ -39,6 +40,10 @@ type AuthFormProps = {
 };
 
 export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
+  const router = useRouter();
+  const handleVerification = async(e: React.FormEvent) => {
+    e.preventDefault();
+  }
   const isSignUp = mode === "sign-up";
   const [errors, setErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState("");
@@ -76,7 +81,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
     return nextErrors;
   }
     async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+      event.preventDefault();
     const form = event.currentTarget;
     if (awaitingConfirmation) {
       const code = String(new FormData(form).get("password") ?? "").trim();
@@ -84,8 +89,10 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
       setLocalAuthError("");
       try {
         await confirmSignUp({ username: pendingEmail, confirmationCode: code });
-        setAwaitingConfirmation(false);
-        setNotice("Confirmed. You can now sign in.");
+        const { isSignedIn } = await autoSignIn();
+        if(!isSignedIn) throw new Error("not-signed-in");
+
+        router.push('/registration');
       } catch {
         setLocalAuthError("That confirmation code is incorrect.");
       } finally {
@@ -121,7 +128,10 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
         const { isSignUpComplete, nextStep } = await signUp({
           username: email,
           password,
-          options: { userAttributes: { email } },
+          options: { 
+            userAttributes: { email } ,
+            autoSignIn: true,
+          },
         });
         if (!isSignUpComplete && nextStep.signUpStep === "CONFIRM_SIGN_UP") {
           setPendingEmail(email);
