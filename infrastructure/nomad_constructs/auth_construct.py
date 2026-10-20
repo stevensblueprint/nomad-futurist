@@ -19,10 +19,13 @@ class AuthConstruct(Construct):
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
         
-        sender_email = "eli6@stevens.edu"
-        self.ses_identity = ses.EmailIdentity(
-            self, "AuthEmailIdentity", 
-            identity=ses.Identity.email(sender_email)
+        ses_domain = "nomadfuturist.org"
+        sender_email = f"no-reply@{ses_domain}"
+
+        self.ses_identity = ses.EmailIdentity.from_email_identity_name(
+            self, 
+            "AuthEmailIdentity", 
+            ses_domain
         )
 
         
