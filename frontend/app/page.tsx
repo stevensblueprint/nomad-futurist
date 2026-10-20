@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { fetchAuthSession } from "aws-amplify/auth";
+import { fetchAuthSession, signOut } from "aws-amplify/auth";
 import "./auth/amplify-config";
 import styles from "./Home.module.css";
 
@@ -33,6 +33,7 @@ export default function Home() {
     };
   }, []);
 
+
   return (
     <main className={styles.page}>
       <div className={styles.content}>
@@ -46,6 +47,7 @@ export default function Home() {
             Register your project
           </button>
         )}
+        <button onClick={() => signOut()}> Sign Out </button>
       </div>
     </main>
   );
