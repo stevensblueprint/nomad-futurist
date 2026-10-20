@@ -1,6 +1,7 @@
 ---
-# Existing resources already managed by NomadStack in us-east-1.
-# Preserve logical IDs, properties, and retention policies during API updates.
+Metadata:
+  AWSToolsMetrics:
+    IaC_Generator: "arn:aws:cloudformation:us-east-1:904233098281:generatedTemplate/a1af6453-5784-430b-a8cf-18a0eabfe7c3"
 Resources:
   RDSDBInstance:
     UpdateReplacePolicy: "Retain"
@@ -45,7 +46,7 @@ Resources:
       MaxAllocatedStorage: 1000
       EnableIAMDatabaseAuthentication: false
       PubliclyAccessible: false
-      BackupRetentionPeriod: 14
+      BackupRetentionPeriod: 1
       EnableCloudwatchLogsExports: []
   EC2VPC:
     UpdateReplacePolicy: "Retain"
