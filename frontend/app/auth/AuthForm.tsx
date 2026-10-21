@@ -41,9 +41,7 @@ type AuthFormProps = {
 
 export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
   const router = useRouter();
-  const handleVerification = async(e: React.FormEvent) => {
-    e.preventDefault();
-  }
+
   const isSignUp = mode === "sign-up";
   const [errors, setErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState("");
@@ -83,20 +81,37 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
     async function handleSubmit(event: FormEvent<HTMLFormElement>) {
       event.preventDefault();
     const form = event.currentTarget;
+    let confirmationSucceeded = false;
     if (awaitingConfirmation) {
-      const code = String(new FormData(form).get("password") ?? "").trim();
+      const code = String(new FormData(form).get("code") ?? "").trim();
       setSubmitting(true);
       setLocalAuthError("");
       try {
         await confirmSignUp({ username: pendingEmail, confirmationCode: code });
-        const { isSignedIn } = await autoSignIn();
-        if(!isSignedIn) throw new Error("not-signed-in");
-
-        router.push('/registration');
-      } catch {
-        setLocalAuthError("That confirmation code is incorrect.");
-      } finally {
+        confirmationSucceeded = true;
+      } catch (err: any){
+        setLocalAuthError(err?.message || "That confirmation code is incorrect.");
+ 
         setSubmitting(false);
+        return;
+      }
+
+      if(confirmationSucceeded){
+        try {
+          const { isSignedIn } = await autoSignIn();
+          if(isSignedIn){
+            router.push('/registration');
+          } else {
+            router.push('/signin');
+          }
+        } catch {
+          setLocalAuthError("Account verified! Redirecting to sign in...");
+          setTimeout(()=> {
+            router.push('/signin');
+          }, 2000);
+        } finally {
+          setSubmitting(false);
+        }
       }
       return;
     }
@@ -113,7 +128,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
 
     const firstInvalidField = Object.keys(nextErrors)[0];
     if (firstInvalidField) {
-      (form.elements.namedItem(firstInvalidField) as HTMLInputElement).focus();
+      (form.elements.namedItem(firstInvalidField) as HTMLInputElement | null)?.focus();
       return;
     }
 

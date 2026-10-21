@@ -103,13 +103,7 @@ class AuthConstruct(Construct):
         self.post_confirmation_lambda.add_to_role_policy(
             iam.PolicyStatement(
                 actions = ["cognito-idp:AdminAddUserToGroup"],
-                resources=[
-                    cdk.Stack.of(self).format_arn(
-                    service="cognito-idp",
-                    resource="userpool",
-                    resource_name="*",
-                    )
-                ],
+                resources=[self.user_pool.attr_arn],
             )
         )
         self.user_pool.node.add_dependency(self.ses_identity)
