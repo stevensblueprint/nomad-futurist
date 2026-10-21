@@ -41,7 +41,7 @@ export default function Home() {
           <button
             className={styles.registerButton}
             type="button"
-            onClick={() => router.push("/register-project")}
+            onClick={() => router.push("/registration")}
           >
             Register your project
           </button>

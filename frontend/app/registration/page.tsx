@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Registration from "../registration/Registration";
+import Registration from "./Registration";
 
 export const metadata: Metadata = {
   title: "Register Your Project | Nomad Incubator",
 };
 
-export default function RegisterProjectPage() {
+export default function RegistrationPage() {
   return <Registration />;
 }

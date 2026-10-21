@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import aws_cdk as cdk
 from aws_cdk import (
@@ -19,42 +18,10 @@ FUNCTIONS_ROOT = Path(__file__).resolve().parent.parent / "functions"
 DEFAULT_FRONTEND_ORIGIN = "http://localhost:3000"
 
 
-def _frontend_origin(scope: Construct) -> str:
-    value = cdk.App.of(scope).node.try_get_context("frontendOrigin")
-    if value is None:
-        value = DEFAULT_FRONTEND_ORIGIN
-    if not isinstance(value, str) or any(character.isspace() for character in value):
-        raise ValueError("CDK context frontendOrigin must be an absolute HTTP or HTTPS origin.")
-    try:
-        parsed = urlsplit(value)
-        valid = (
-            parsed.scheme.lower() in {"http", "https"}
-            and bool(parsed.hostname)
-            and parsed.path == ""
-            and not parsed.query
-            and not parsed.fragment
-            and "?" not in value
-            and "#" not in value
-            and parsed.username is None
-            and parsed.password is None
-            and not any(character.isspace() for character in parsed.netloc)
-            and "\\" not in parsed.netloc
-            and not parsed.netloc.endswith(":")
-            and "'" not in value
-            and '"' not in value
-        )
-        _ = parsed.port
-    except ValueError:
-        valid = False
-    if not valid:
-        raise ValueError("CDK context frontendOrigin must be an absolute HTTP or HTTPS origin without path, query, fragment, or user info.")
-    return value
-
-
 class ApiConstruct(Construct):
     def __init__(self, scope: Construct, construct_id: str, *, user_pool_id: str, admin_user_provisioning_lambda: lambda_.IFunction,) -> None:
         super().__init__(scope, construct_id)
-        frontend_origin = _frontend_origin(self)
+        frontend_origin = DEFAULT_FRONTEND_ORIGIN
         
         registration_lambda_role = iam.Role(
             self,
