@@ -1,14 +1,19 @@
 .page {
+  --background: #ffffff;
+  --foreground: #171717;
+
   flex: 1;
   min-height: 100svh;
   display: grid;
   place-items: center;
   padding: 3rem 1.5rem;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 .content {
   width: 100%;
-  max-width: 32rem;
+  max-width: 25rem;
 }
 
 .header {
@@ -49,7 +54,7 @@
   border-radius: 0.375rem;
   background: var(--background);
   color: var(--foreground);
-  font: inherit;
+  font-family: inherit;
   font-size: 1rem;
 }
 
@@ -65,10 +70,18 @@
   outline-offset: 3px;
 }
 
-.status {
-  min-height: 1.5rem;
+.error,
+.notice {
   font-size: 0.875rem;
   line-height: 1.5;
+}
+
+.error {
+  color: #b42318;
+}
+
+.form > div:empty:not([aria-live]) {
+  display: none;
 }
 
 .submit {
@@ -82,8 +95,12 @@
   cursor: pointer;
 }
 
-.submit:hover:not(:disabled) {
+.submit:hover {
   background: color-mix(in srgb, var(--foreground) 85%, var(--background));
+}
+
+.submit:active {
+  background: color-mix(in srgb, var(--foreground) 75%, var(--background));
 }
 
 .submit:disabled {

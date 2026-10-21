@@ -55,7 +55,7 @@ export default function ValidationForm({ projectId }: ValidationFormProps) {
     <main className={styles.page}>
       <div className={styles.content}>
         <header className={styles.header}>
-          <h1>Project validation</h1>
+          <h1>Project Validation</h1>
           <p>Submit a validation decision for project {projectId}.</p>
         </header>
 
@@ -109,9 +109,15 @@ export default function ValidationForm({ projectId }: ValidationFormProps) {
             />
           </div>
 
-          <div className={styles.status} aria-live="polite">
-            {status === "success" && "Validation submitted successfully."}
-            {status === "error" && "Unable to submit validation. Please try again."}
+          <div aria-live="polite" aria-atomic="true">
+            {status === "success" && (
+              <p className={styles.notice}>Validation submitted successfully.</p>
+            )}
+            {status === "error" && (
+              <p role="alert" className={styles.error}>
+                Unable to submit validation. Please try again.
+              </p>
+            )}
           </div>
 
           <button className={styles.submit} type="submit" disabled={isSubmitting}>
