@@ -39,6 +39,10 @@ describe("ValidationForm", () => {
       },
     );
     expect(await screen.findByText("Validation submitted successfully.")).toBeVisible();
+    expect(screen.getByLabelText("Validation decision")).toHaveValue("");
+    expect(screen.getByLabelText("Reviewer feedback")).toHaveValue("");
+    expect(screen.getByLabelText("Questions")).toHaveValue("");
+    expect(screen.getByLabelText("Next steps")).toHaveValue("");
   });
 
   it("shows a loading state and an error when the request fails", async () => {

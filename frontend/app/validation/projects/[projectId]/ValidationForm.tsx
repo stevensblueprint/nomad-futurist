@@ -43,6 +43,7 @@ export default function ValidationForm({ projectId }: ValidationFormProps) {
       );
 
       if (!response.ok) throw new Error("Validation request failed.");
+      setValidation(initialValidation);
       setStatus("success");
     } catch {
       setStatus("error");
