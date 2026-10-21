@@ -5,6 +5,7 @@ import aws_cdk as cdk
 from aws_cdk import assertions
 from aws_cdk import aws_s3_assets as s3_assets
 
+from nomad_constructs.lambda_asset import PYTHON_CACHE_EXCLUDES
 from stacks.nomad_stack import NomadStack
 
 
@@ -29,10 +30,11 @@ class AuthConstructTest(unittest.TestCase):
                 / "functions"
                 / "admin_user_provisioning"
             ),
+            exclude=list(PYTHON_CACHE_EXCLUDES),
         )
         template = assertions.Template.from_stack(stack)
 
-        template.resource_count_is("AWS::Lambda::Function", 1)
+        template.resource_count_is("AWS::Lambda::Function", 3)
         resources = template.to_json()["Resources"]
         user_pool_logical_id = next(
             logical_id
@@ -43,6 +45,7 @@ class AuthConstructTest(unittest.TestCase):
             (logical_id, resource)
             for logical_id, resource in resources.items()
             if resource["Type"] == "AWS::Lambda::Function"
+            and "USER_POOL_ID" in resource["Properties"].get("Environment", {}).get("Variables", {})
         )
         lambda_properties = provisioning_lambda["Properties"]
 
@@ -75,7 +78,7 @@ class AuthConstructTest(unittest.TestCase):
             {"Fn::GetAtt": [user_pool_logical_id, "Arn"]}, statements[0]["Resource"]
         )
 
-    def test_nomad_stack_exposes_only_the_admin_user_api_route(self) -> None:
+    def test_nomad_stack_preserves_the_admin_user_api_route(self) -> None:
         app = cdk.App()
         stack = NomadStack(app, "TestNomadStack")
         template = assertions.Template.from_stack(stack)
@@ -93,6 +96,7 @@ class AuthConstructTest(unittest.TestCase):
             logical_id
             for logical_id, resource in resources.items()
             if resource["Type"] == "AWS::Lambda::Function"
+            and "USER_POOL_ID" in resource["Properties"].get("Environment", {}).get("Variables", {})
         )
         admin_logical_id = next(
             logical_id
