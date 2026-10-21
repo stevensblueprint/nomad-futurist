@@ -6,9 +6,10 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
 import AuthErrorNotice from "./AuthErrorNotice";
 import { authErrorMessage } from "./auth-errors";
+import { getSignInOutcome, passwordRequirements, validatePassword } from "./authLogic";
 import "./amplify-config";
 import { autoSignIn, confirmSignUp, fetchAuthSession, signIn, signUp } from "aws-amplify/auth";
-type FieldName = "email" | "password" | "confirmPassword";
+type FieldName = "email" | "password" | "confirmPassword" | "confirmationCode";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
 type AuthFormProps = {
@@ -69,13 +70,21 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
     else if (emailInput.validity.typeMismatch)
       nextErrors.email = "Enter a valid email address.";
 
-    if (!password) nextErrors.password = "Enter your password.";
-
-    if (isSignUp && !awaitingConfirmation) {
+    if (awaitingConfirmation) {
+      if (!String(data.get("confirmationCode") ?? "").trim())
+        nextErrors.confirmationCode = "Enter your confirmation code.";
+    } else if (isSignUp) {
+      if (!password) nextErrors.password = "Enter your password.";
+      else {
+        const issues = validatePassword(password);
+        if (issues.length) nextErrors.password = issues.join(" ");
+      }
       if (!confirmation)
         nextErrors.confirmPassword = "Confirm your password.";
       else if (confirmation !== password)
         nextErrors.confirmPassword = "Passwords do not match.";
+    } else if (!password) {
+      nextErrors.password = "Enter your password.";
     }
 
     return nextErrors;
@@ -84,30 +93,6 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
     event.preventDefault();
     if (checkingSession || submissionInProgress.current) return;
     const form = event.currentTarget;
-    if (awaitingConfirmation) {
-      const code = String(new FormData(form).get("password") ?? "").trim();
-      setSubmitting(true);
-      submissionInProgress.current = true;
-      setLocalAuthError("");
-      try {
-        await confirmSignUp({ username: pendingEmail, confirmationCode: code });
-        setAwaitingConfirmation(false);
-        try {
-          const { isSignedIn } = await autoSignIn();
-          router.push(isSignedIn ? "/registration" : "/sign-in");
-        } catch {
-          router.push("/sign-in");
-        }
-      } catch (error: unknown) {
-        setLocalAuthError(
-          error instanceof Error ? error.message : "That confirmation code is incorrect."
-        );
-      } finally {
-        submissionInProgress.current = false;
-        setSubmitting(false);
-      }
-      return;
-    }
 
     const nextErrors = validate(form);
 
@@ -119,9 +104,9 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
       submission: current.submission + 1,
     }));
 
-    const firstInvalidField = Object.keys(nextErrors)[0];
+    const firstInvalidField = Object.keys(nextErrors)[0] as FieldName | undefined;
     if (firstInvalidField) {
-      (form.elements.namedItem(firstInvalidField) as HTMLInputElement).focus();
+      (form.elements.namedItem(firstInvalidField) as HTMLInputElement | null)?.focus();
       return;
     }
 
@@ -131,7 +116,25 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
     setSubmitting(true);
     submissionInProgress.current = true;
     try {
-      if (isSignUp) {
+      if (awaitingConfirmation) {
+        const { isSignUpComplete } = await confirmSignUp({
+          username: pendingEmail,
+          confirmationCode: String(data.get("confirmationCode") ?? "").trim(),
+        });
+        if (isSignUpComplete) {
+          setAwaitingConfirmation(false);
+          setPendingEmail("");
+          setErrors({});
+          try {
+            const { isSignedIn } = await autoSignIn();
+            router.push(isSignedIn ? "/registration" : "/sign-in");
+          } catch {
+            router.push("/sign-in");
+          }
+        } else {
+          setLocalAuthError("Account confirmation needs another step. Please try signing in to continue.");
+        }
+      } else if (isSignUp) {
         const { isSignUpComplete, nextStep } = await signUp({
           username: email,
           password,
@@ -143,14 +146,17 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
         if (!isSignUpComplete && nextStep.signUpStep === "CONFIRM_SIGN_UP") {
           setPendingEmail(email);
           setAwaitingConfirmation(true);
+          setErrors({});
           setNotice("Check your email for a confirmation code.");
+        } else if (isSignUpComplete) {
+          setNotice("Account created. You can now sign in.");
         }
       } else {
-        const result = await signIn({ username: email, password });
+        const result = getSignInOutcome(await signIn({ username: email, password }));
         if (result.isSignedIn) {
           router.replace("/");
         } else {
-          setNotice("Complete the sign-in steps to continue.");
+          setLocalAuthError(result.message);
         }
       }
     } catch (err) {
@@ -173,15 +179,26 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
     }
   }
 
-  const fields: { name: FieldName; label: string; autoComplete: string }[] = [
-    { name: "email", label: "Email address", autoComplete: "email" },
+  const fields: {
+    name: FieldName;
+    label: string;
+    autoComplete: string;
+    type: "email" | "password" | "text";
+    inputMode?: "numeric";
+    readOnly?: boolean;
+  }[] = awaitingConfirmation ? [
+    { name: "email", label: "Email address", type: "email", autoComplete: "email", readOnly: true },
+    { name: "confirmationCode", label: "Confirmation code", type: "text", inputMode: "numeric", autoComplete: "one-time-code" },
+  ] : [
+    { name: "email", label: "Email address", type: "email", autoComplete: "email" },
     {
       name: "password",
-      label: awaitingConfirmation ? "Confirmation code" : "Password",
+      label: "Password",
+      type: "password",
       autoComplete: isSignUp ? "new-password" : "current-password",
     },
-    ...(isSignUp && !awaitingConfirmation
-      ? [{ name: "confirmPassword" as const, label: "Confirm password", autoComplete: "new-password" }]
+    ...(isSignUp
+      ? [{ name: "confirmPassword" as const, label: "Confirm password", type: "password" as const, autoComplete: "new-password" }]
       : []),
   ];
 
@@ -230,18 +247,29 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
               <p key={validationSummary.submission}>{validationSummary.message}</p>
             )}
           </div>
-          {fields.map(({ name, label, autoComplete }) => (
-            <div className={styles.field} key={name}>
+          {fields.map(({ name, label, autoComplete, type, inputMode, readOnly }) => (
+            <div className={styles.field} key={`${name}-${awaitingConfirmation}`}>
               <label htmlFor={name}>{label}</label>
+              {name === "password" && isSignUp && (
+                <ul id="password-requirements" className={styles.requirements}>
+                  {passwordRequirements.map(({ message }) => <li key={message}>{message}</li>)}
+                </ul>
+              )}
               <input
                 id={name}
                 name={name}
-                type={name === "email" ? "email" : "password"}
+                type={type}
+                inputMode={inputMode}
                 autoComplete={autoComplete}
+                readOnly={readOnly}
+                defaultValue={name === "email" && awaitingConfirmation ? pendingEmail : undefined}
                 required
                 disabled={submitting}
                 aria-invalid={Boolean(errors[name])}
-                aria-describedby={errors[name] ? `${name}-error` : undefined}
+                aria-describedby={[
+                  errors[name] ? `${name}-error` : undefined,
+                  name === "password" && isSignUp ? "password-requirements" : undefined,
+                ].filter(Boolean).join(" ") || undefined}
               />
               {errors[name] && (
                 <p id={`${name}-error`} className={styles.error}>

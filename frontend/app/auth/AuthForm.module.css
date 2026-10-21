@@ -52,6 +52,14 @@
   font-size: 1rem;
 }
 
+.requirements {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
 .field input:focus-visible,
 .submit:focus-visible,
 .footer a:focus-visible {
