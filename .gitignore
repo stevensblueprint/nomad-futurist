@@ -6,6 +6,9 @@ out/
 # Node
 node_modules/
 
+# TypeScript
+*.tsbuildinfo
+
 # Python
 .venv/
 venv/
