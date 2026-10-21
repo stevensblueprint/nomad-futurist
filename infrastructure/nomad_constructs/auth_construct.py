@@ -19,10 +19,13 @@ class AuthConstruct(Construct):
         super().__init__(scope, construct_id)
         
         # Cognito User Pool
-        sender_email = "eli6@stevens.edu"
-        self.ses_identity = ses.EmailIdentity(
-            self, "AuthEmailIdentity", 
-            identity=ses.Identity.email(sender_email)
+        ses_domain = "nomadfuturist.org"
+        sender_email = f"no-reply@{ses_domain}"
+
+        self.ses_identity = ses.EmailIdentity.from_email_identity_name(
+            self, 
+            "AuthEmailIdentity", 
+            ses_domain
         )
 
         
