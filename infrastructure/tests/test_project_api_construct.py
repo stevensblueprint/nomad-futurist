@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import aws_cdk as cdk
 from aws_cdk import assertions
@@ -63,8 +64,9 @@ class ProjectApiConstructTest(unittest.TestCase):
                 }),
             })
 
-    def test_custom_frontend_origin_is_used_for_cors_and_registration_lambda(self):
-        app = cdk.App(context={"frontendOrigin": "http://localhost:3001"})
+    @patch("nomad_constructs.api_construct.DEFAULT_FRONTEND_ORIGIN", "http://localhost:3001")
+    def test_centralized_frontend_origin_is_used_for_cors_and_registration_lambda(self):
+        app = cdk.App()
         stack = NomadStack(app, "CustomFrontendOrigin")
         template = assertions.Template.from_stack(stack)
         resources = template.to_json()["Resources"]
@@ -100,19 +102,6 @@ class ProjectApiConstructTest(unittest.TestCase):
             and "ProjectRegistrationLambda" in key
         )
         self.assertEqual("http://localhost:3001", registration["Environment"]["Variables"]["FRONTEND_ORIGIN"])
-
-    def test_invalid_frontend_origin_context_is_rejected(self):
-        for origin in (
-            "https://example.org/path", "https://example.org?query=1",
-            "https://example.org?", "https://example.org#", "http://example.org:", "",
-            "https://user@example.org", "javascript:alert(1)",
-            "http://example.org'", "http://bad host.example",
-            "http://localhost:3001\n", "http://local\thost:3001",
-        ):
-            with self.subTest(origin=origin):
-                app = cdk.App(context={"frontendOrigin": origin})
-                with self.assertRaises(ValueError):
-                    NomadStack(app, "InvalidFrontendOrigin")
 
     def test_registration_lambda_has_only_basic_execution_permissions(self):
         registration = next(

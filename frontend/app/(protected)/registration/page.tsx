@@ -1,9 +1,10 @@
-import RegistrationForm from "./Registration"
+import type { Metadata } from "next";
+import Registration from "./Registration";
 
-export default function Registration() {
-  return (
-    <>
-      <RegistrationForm />
-    </>
-  )
+export const metadata: Metadata = {
+  title: "Register Your Project | Nomad Incubator",
+};
+
+export default function RegistrationPage() {
+  return <Registration />;
 }

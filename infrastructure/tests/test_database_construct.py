@@ -38,6 +38,7 @@ class DatabaseConstructTest(unittest.TestCase):
         database = self.resources["RDSDBInstance"]["Properties"]
         self.assertEqual("db-nomad", database["DBInstanceIdentifier"])
         self.assertEqual("postgres", database["Engine"])
+        self.assertEqual(1, database["BackupRetentionPeriod"])
         self.assertTrue(database["DeletionProtection"])
         self.assertFalse(database["PubliclyAccessible"])
         self.assertEqual("nomad-db-subnet-group", database["DBSubnetGroupName"])
