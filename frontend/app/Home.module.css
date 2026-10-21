@@ -37,6 +37,11 @@
   background: color-mix(in srgb, var(--foreground) 75%, var(--background));
 }
 
+.registerButton:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .registerButton:focus-visible {
   outline: 2px solid var(--foreground);
   outline-offset: 3px;
