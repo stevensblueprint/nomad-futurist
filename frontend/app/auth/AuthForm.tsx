@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
+import AuthErrorNotice from "./AuthErrorNotice";
+import { authErrorMessage } from "./auth-errors";
 import "./amplify-config";
-import { autoSignIn, confirmSignUp, signIn, signUp } from "aws-amplify/auth";
+import { autoSignIn, confirmSignUp, fetchAuthSession, signIn, signUp } from "aws-amplify/auth";
 type FieldName = "email" | "password" | "confirmPassword";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
@@ -27,7 +29,33 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(!isSignUp);
+  const submissionInProgress = useRef(false);
   const displayedError = localAuthError || authenticationError;
+
+  useEffect(() => {
+    if (isSignUp) return;
+    let active = true;
+
+    void fetchAuthSession()
+      .then((session) => {
+        if (!active) return;
+        if (session.tokens?.accessToken) {
+          router.replace("/");
+        } else {
+          setCheckingSession(false);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        if (!(error instanceof Object && "name" in error && error.name === "UserUnAuthenticatedException")) {
+          setLocalAuthError(authErrorMessage(error));
+        }
+        setCheckingSession(false);
+      });
+
+    return () => { active = false; };
+  }, [isSignUp, router]);
 
   function validate(form: HTMLFormElement): FieldErrors {
     const data = new FormData(form);
@@ -52,12 +80,14 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
 
     return nextErrors;
   }
-    async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (checkingSession || submissionInProgress.current) return;
     const form = event.currentTarget;
     if (awaitingConfirmation) {
       const code = String(new FormData(form).get("password") ?? "").trim();
       setSubmitting(true);
+      submissionInProgress.current = true;
       setLocalAuthError("");
       try {
         await confirmSignUp({ username: pendingEmail, confirmationCode: code });
@@ -73,16 +103,17 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           error instanceof Error ? error.message : "That confirmation code is incorrect."
         );
       } finally {
+        submissionInProgress.current = false;
         setSubmitting(false);
       }
       return;
     }
 
-   
     const nextErrors = validate(form);
 
     setErrors(nextErrors);
-        setNotice("");
+    setNotice("");
+    setLocalAuthError("");
     setValidationSummary((current) => ({
       message: Object.values(nextErrors).join(" "),
       submission: current.submission + 1,
@@ -97,15 +128,17 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
     const data = new FormData(form);
     const email = String(data.get("email") ?? "").trim();
     const password = String(data.get("password") ?? "");
-    
-   
     setSubmitting(true);
+    submissionInProgress.current = true;
     try {
       if (isSignUp) {
         const { isSignUpComplete, nextStep } = await signUp({
           username: email,
           password,
-          options: { userAttributes: { email }, autoSignIn: true },
+          options: {
+            userAttributes: { email },
+            autoSignIn: true,
+          },
         });
         if (!isSignUpComplete && nextStep.signUpStep === "CONFIRM_SIGN_UP") {
           setPendingEmail(email);
@@ -121,14 +154,21 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
         }
       }
     } catch (err) {
-      setLocalAuthError(
-        (err as { name?: string })?.name === "UsernameExistsException"
-          ? "An account with that email already exists."
-          : (err as { name?: string })?.name === "NotAuthorizedException"
-          ? "Incorrect email or password."
-          : "Something went wrong. Please try again."
-      );
+      // Another tab can sign in after the initial session check.
+      if (!isSignUp && err instanceof Object && "name" in err && err.name === "UserAlreadyAuthenticatedException") {
+        try {
+          if ((await fetchAuthSession()).tokens?.accessToken) {
+            router.replace("/");
+            return;
+          }
+        } catch (sessionError) {
+          setLocalAuthError(authErrorMessage(sessionError));
+          return;
+        }
+      }
+      setLocalAuthError(authErrorMessage(err));
     } finally {
+      submissionInProgress.current = false;
       setSubmitting(false);
     }
   }
@@ -144,6 +184,14 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
       ? [{ name: "confirmPassword" as const, label: "Confirm password", autoComplete: "new-password" }]
       : []),
   ];
+
+  if (checkingSession) {
+    return (
+      <main className={styles.page}>
+        <p role="status">Checking your sign-in session...</p>
+      </main>
+    );
+  }
 
   return (
     <main className={styles.page}>
@@ -162,7 +210,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           onSubmit={handleSubmit}
           onChange={(event) => {
             setNotice("");
-            setLocalAuthError("")
+            setLocalAuthError("");
             setValidationSummary((current) => ({ ...current, message: "" }));
             const nextErrors = validate(event.currentTarget);
             setErrors((currentErrors) => {
@@ -191,6 +239,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
                 type={name === "email" ? "email" : "password"}
                 autoComplete={autoComplete}
                 required
+                disabled={submitting}
                 aria-invalid={Boolean(errors[name])}
                 aria-describedby={errors[name] ? `${name}-error` : undefined}
               />
@@ -202,10 +251,8 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
             </div>
           ))}
 
+          <AuthErrorNotice message={displayedError} />
           <div aria-live="polite" aria-atomic="true">
-            {displayedError && (
-              <p role="alert" className={styles.error}>{displayedError}</p>
-            )}
             {notice && <p className={styles.notice}>{notice}</p>}
           </div>
 
