@@ -34,7 +34,7 @@ def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     return {
         "statusCode": status_code,
         "headers": {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "http://localhost:3000"
             },
         "body": json.dumps(body),
