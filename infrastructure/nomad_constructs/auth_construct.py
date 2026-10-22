@@ -18,10 +18,13 @@ class AuthConstruct(Construct):
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
         
-        sender_email = "eli6@stevens.edu"
-        self.ses_identity = ses.EmailIdentity(
-            self, "AuthEmailIdentity", 
-            identity=ses.Identity.email(sender_email)
+        ses_domain = "nomadfuturist.org"
+        sender_email = f"no-reply@{ses_domain}"
+
+        self.ses_identity = ses.EmailIdentity.from_email_identity_name(
+            self, 
+            "AuthEmailIdentity", 
+            ses_domain
         )
 
         self.post_confirmation_lambda = lambda_.Function(
@@ -98,14 +101,21 @@ class AuthConstruct(Construct):
             "CognitoInvokePostConfirmation", 
             principal=iam.ServicePrincipal("cognito-idp.amazonaws.com"),
             source_arn=self.user_pool.attr_arn,
+            source_account=cdk.Stack.of(self).account,
         )
 
-        self.post_confirmation_lambda.add_to_role_policy(
-            iam.PolicyStatement(
-                actions = ["cognito-idp:AdminAddUserToGroup"],
-                resources=[self.user_pool.attr_arn],
-            )
+        post_confirmation_policy = iam.Policy(
+            self,
+            "PostConfirmationUserPoolPolicy",
+            statements=[
+                iam.PolicyStatement(
+                    actions=["cognito-idp:AdminAddUserToGroup",],
+                    resources=[self.user_pool.attr_arn,],
+                )
+            ],
         )
+
+        self.post_confirmation_lambda.role.attach_inline_policy(post_confirmation_policy)
         self.user_pool.node.add_dependency(self.ses_identity)
         self._retain(self.user_pool)
         
