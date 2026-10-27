@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { fetchAuthSession } from "aws-amplify/auth";
-import "../auth/amplify-config";
+import "../../auth/amplify-config";
 import styles from "./Registration.module.css";
 import {
   projectsEndpoint,

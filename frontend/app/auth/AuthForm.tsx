@@ -15,13 +15,14 @@ type FieldErrors = Partial<Record<FieldName, string>>;
 type AuthFormProps = {
   mode: "sign-up" | "sign-in";
   authenticationError?: string;
+  initialNotice?: string;
 };
 
-export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
+export default function AuthForm({ mode, authenticationError, initialNotice }: AuthFormProps) {
   const router = useRouter();
   const isSignUp = mode === "sign-up";
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState(initialNotice ?? "");
   const [validationSummary, setValidationSummary] = useState({
     message: "",
     submission: 0,

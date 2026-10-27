@@ -5,6 +5,18 @@ export const metadata: Metadata = {
   title: "Sign In | Nomad Incubator",
 };
 
-export default function SignInPage() {
-  return <AuthForm mode="sign-in" />;
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{notice?: string}>;
+}) {
+  const { notice } = await searchParams;
+  return (
+    <AuthForm 
+    mode="sign-in" 
+    initialNotice={
+      notice === "confirmed-please-sign-in"
+      ? "Your account is confirmed. Please sign in."
+      : undefined
+  } />);
 }
