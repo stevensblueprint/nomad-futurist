@@ -10,7 +10,7 @@
     "test:registration": "node --test app/registration/registration-utils.test.mjs",
     "test:auth": "node --test app/auth/authLogic.test.mjs",
     "test:validation": "vitest run app/validation",
-    "test": "npm run test:registration && npm run test:auth && npm run test:validation"
+    "test": "npm run test:registration && npm run test:auth && npm run test:validation && vitest run"
   },
   "dependencies": {
     "@aws-amplify/ui-react": "^6.15.6",

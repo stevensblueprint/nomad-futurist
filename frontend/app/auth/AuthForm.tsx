@@ -94,6 +94,37 @@ export default function AuthForm({ mode, authenticationError, initialNotice}: Au
     event.preventDefault();
     if (checkingSession || submissionInProgress.current) return;
     const form = event.currentTarget;
+    let confirmationSucceeded = false;
+    if (awaitingConfirmation) {
+      const code = String(new FormData(form).get("password") ?? "").trim();
+      setSubmitting(true);
+      setLocalAuthError("");
+      try {
+        await confirmSignUp({ username: pendingEmail, confirmationCode: code });
+        confirmationSucceeded = true;
+      } catch (err) {
+        setLocalAuthError((err as { message?: string})?.message || "That confirmation code is incorrect.");
+
+        setSubmitting(false);
+        return;
+      }
+
+      if (confirmationSucceeded) {
+        try {
+          const { isSignedIn } = await autoSignIn();
+          router.replace(
+            isSignedIn ? "/" : "/sign-in?notice=confirmed-please-sign-in"
+          );
+        } catch {
+          router.replace("/sign-in?notice=confirmed-please-sign-in");
+        } 
+          finally {
+        setSubmitting(false);
+      }
+      }
+      return;
+    }
+
 
     const nextErrors = validate(form);
 
@@ -153,11 +184,11 @@ export default function AuthForm({ mode, authenticationError, initialNotice}: Au
           setNotice("Account created. You can now sign in.");
         }
       } else {
-        const result = getSignInOutcome(await signIn({ username: email, password }));
-        if (result.isSignedIn) {
+        const { isSignedIn } = await signIn({ username: email, password });
+        if (isSignedIn) {
           router.replace("/");
         } else {
-          setLocalAuthError(result.message);
+          setLocalAuthError("Additional sign-in steps are required.");
         }
       }
     } catch (err) {
