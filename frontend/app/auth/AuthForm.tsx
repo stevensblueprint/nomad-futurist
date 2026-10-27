@@ -5,46 +5,25 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
 import { useRouter } from 'next/navigation'
-import { Amplify } from 'aws-amplify';
 import { signUp, confirmSignUp, signIn, autoSignIn } from "aws-amplify/auth";
 
-Amplify.configure({
-  Auth: {
-    Cognito: {
-      userPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID!,
-      userPoolClientId: process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID!,
 
-      loginWith: {
-        email: true
-      },
-      signUpVerificationMethod: 'code',
-      userAttributes: {
-        email: { required: true }
-      },
-      passwordFormat: {
-        minLength: 8,
-        requireLowercase: true,
-        requireUppercase: true,
-        requireNumbers: true,
-        requireSpecialCharacters: true
-      }
-    }
-  }
-});
+
 type FieldName = "email" | "password" | "confirmPassword";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
 type AuthFormProps = {
   mode: "sign-up" | "sign-in";
   authenticationError?: string;
+  initialNotice?: string;
 };
 
-export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
+export default function AuthForm({ mode, authenticationError, initialNotice}: AuthFormProps) {
   const router = useRouter();
 
   const isSignUp = mode === "sign-up";
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState(initialNotice ?? "");
   const [validationSummary, setValidationSummary] = useState({
     message: "",
     submission: 0,
@@ -89,8 +68,8 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
       try {
         await confirmSignUp({ username: pendingEmail, confirmationCode: code });
         confirmationSucceeded = true;
-      } catch (err: any) {
-        setLocalAuthError(err?.message || "That confirmation code is incorrect.");
+      } catch (err) {
+        setLocalAuthError((err as { message?: string})?.message || "That confirmation code is incorrect.");
 
         setSubmitting(false);
         return;
@@ -99,19 +78,15 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
       if (confirmationSucceeded) {
         try {
           const { isSignedIn } = await autoSignIn();
-          if (isSignedIn) {
-            router.push('/registration');
-          } else {
-            router.push('/sign-in');
-          }
+          router.replace(
+            isSignedIn ? "/" : "/sign-in?notice=confirmed-please-sign-in"
+          );
         } catch {
-          setLocalAuthError("Account verified! Redirecting to sign in...");
-          setTimeout(() => {
-            router.push('/signin');
-          }, 2000);
-        } finally {
-          setSubmitting(false);
-        }
+          router.replace("/sign-in?notice=confirmed-please-sign-in");
+        } 
+          finally {
+        setSubmitting(false);
+      }
       }
       return;
     }
@@ -154,8 +129,12 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           setNotice("Check your email for a confirmation code.");
         }
       } else {
-        await signIn({ username: email, password });
-        setNotice("Signed in.");
+        const { isSignedIn } = await signIn({ username: email, password });
+        if (isSignedIn) {
+          router.replace("/");
+        } else {
+          setLocalAuthError("Additional sign-in steps are required.");
+        }
       }
     } catch (err) {
       setLocalAuthError(
