@@ -14,15 +14,19 @@ handler = _MODULE.handler
 
 class ValidationLambdaTest(unittest.TestCase):
     @staticmethod
-    def event(body: str, project_id: str = "project-123") -> dict[str, object]:
+    def event(
+        body: str,
+        project_id: str = "project-123",
+        method: str = "PATCH",
+    ) -> dict[str, object]:
         return {
-            "httpMethod": "PATCH",
+            "httpMethod": method,
             "resource": "/validation/projects/{projectId}",
             "pathParameters": {"projectId": project_id},
             "body": body,
         }
 
-    def test_validation_patch_echoes_the_project_id_and_submitted_object(self) -> None:
+    def test_validation_patch_updates_an_existing_mock_validation(self) -> None:
         validation = {
             "decision": "approved",
             "feedback": "Project appears feasible.",
@@ -30,13 +34,78 @@ class ValidationLambdaTest(unittest.TestCase):
             "nextSteps": "Proceed to review.",
         }
 
-        result = handler(self.event(json.dumps(validation)), None)
+        result = handler(self.event(json.dumps(validation), project_id="project-456"), None)
 
         self.assertEqual(200, result["statusCode"])
         self.assertEqual(
-            {"projectId": "project-123", "validation": validation},
+            {"projectId": "project-456", "validation": validation},
             json.loads(result["body"]),
         )
+
+    def test_validation_patch_rejects_a_project_without_a_mock_validation(self) -> None:
+        result = handler(self.event(json.dumps({"decision": "approved"})), None)
+
+        self.assertEqual(404, result["statusCode"])
+        self.assertEqual(
+            {"message": "Validation not found."},
+            json.loads(result["body"]),
+        )
+
+    def test_validation_post_creates_a_mock_validation_for_a_known_project(self) -> None:
+        validation = {"decision": "approved"}
+
+        result = handler(self.event(json.dumps(validation), method="POST"), None)
+
+        self.assertEqual(201, result["statusCode"])
+        self.assertEqual(
+            {
+                "projectId": "project-123",
+                "validation": validation,
+                "action": "created",
+            },
+            json.loads(result["body"]),
+        )
+
+    def test_validation_post_updates_a_mock_validation_when_one_exists(self) -> None:
+        validation = {"decision": "needs-changes"}
+
+        result = handler(
+            self.event(json.dumps(validation), project_id="project-456", method="POST"),
+            None,
+        )
+
+        self.assertEqual(200, result["statusCode"])
+        self.assertEqual(
+            {
+                "projectId": "project-456",
+                "validation": validation,
+                "action": "updated",
+            },
+            json.loads(result["body"]),
+        )
+
+    def test_validation_post_rejects_an_unknown_mock_project(self) -> None:
+        result = handler(
+            self.event(json.dumps({"decision": "approved"}), project_id="missing", method="POST"),
+            None,
+        )
+
+        self.assertEqual(404, result["statusCode"])
+        self.assertEqual(
+            {"message": "Project not found."},
+            json.loads(result["body"]),
+        )
+
+    def test_validation_post_rejects_malformed_and_non_object_json(self) -> None:
+        for body in ("{", "[]", '"not an object"', "123", "true", "null"):
+            with self.subTest(body=body):
+                result = handler(self.event(body, method="POST"), None)
+
+                self.assertEqual(400, result["statusCode"])
+                self.assertEqual(
+                    {"message": "Request body must be a JSON object."},
+                    json.loads(result["body"]),
+                )
 
     def test_validation_patch_rejects_malformed_json(self) -> None:
         result = handler(self.event("{"), None)
