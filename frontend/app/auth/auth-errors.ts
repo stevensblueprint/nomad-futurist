@@ -15,7 +15,7 @@ export function authErrorMessage(error: unknown): string {
     case "CodeMismatchException":
       return "That confirmation code is incorrect. Check the code and try again.";
     case "ExpiredCodeException":
-      return "That confirmation code has expired. Request a new code and try again.";
+      return "That confirmation code has expired. Contact the Nomad team for help confirming your account.";
     case "CodeDeliveryFailureException":
       return "We could not deliver the confirmation code. Please try again later.";
     case "NetworkError":
