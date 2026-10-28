@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 
+import { mockProjects } from "./mock-projects";
 import styles from "./ValidationForm.module.css";
 
 type ValidationFormProps = {
@@ -9,6 +10,7 @@ type ValidationFormProps = {
 };
 
 type SubmissionStatus = "idle" | "submitting" | "success" | "error";
+type SubmissionAction = "created" | "updated" | null;
 
 const initialValidation = {
   decision: "",
@@ -18,8 +20,11 @@ const initialValidation = {
 };
 
 export default function ValidationForm({ projectId }: ValidationFormProps) {
+  const project = mockProjects[projectId];
+  const submissionMethod = project?.hasValidation ? "PATCH" : "POST";
   const [validation, setValidation] = useState(initialValidation);
   const [status, setStatus] = useState<SubmissionStatus>("idle");
+  const [submissionAction, setSubmissionAction] = useState<SubmissionAction>(null);
 
   function updateField(field: keyof typeof validation, value: string) {
     setValidation((current) => ({ ...current, [field]: value }));
@@ -28,6 +33,7 @@ export default function ValidationForm({ projectId }: ValidationFormProps) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("submitting");
+    setSubmissionAction(null);
 
     try {
       const baseUrl = process.env.NEXT_PUBLIC_PROJECT_API_URL?.replace(/\/$/, "");
@@ -36,14 +42,16 @@ export default function ValidationForm({ projectId }: ValidationFormProps) {
       const response = await fetch(
         `${baseUrl}/validation/projects/${encodeURIComponent(projectId)}`,
         {
-          method: "PATCH",
+          method: submissionMethod,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(validation),
         },
       );
 
       if (!response.ok) throw new Error("Validation request failed.");
+
       setValidation(initialValidation);
+      setSubmissionAction(submissionMethod === "PATCH" ? "updated" : "created");
       setStatus("success");
     } catch {
       setStatus("error");
@@ -52,12 +60,25 @@ export default function ValidationForm({ projectId }: ValidationFormProps) {
 
   const isSubmitting = status === "submitting";
 
+  if (!project) {
+    return (
+      <main className={styles.page}>
+        <div className={styles.content}>
+          <header className={styles.header}>
+            <h1>Project not found</h1>
+            <p>No mock project is available for project {projectId}.</p>
+          </header>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className={styles.page}>
       <div className={styles.content}>
         <header className={styles.header}>
           <h1>Project Validation</h1>
-          <p>Submit a validation decision for project {projectId}.</p>
+          <p>Submit a validation decision for {project.name}.</p>
         </header>
 
         <form className={styles.form} onSubmit={handleSubmit}>
@@ -112,7 +133,9 @@ export default function ValidationForm({ projectId }: ValidationFormProps) {
 
           <div aria-live="polite" aria-atomic="true">
             {status === "success" && (
-              <p className={styles.notice}>Validation submitted successfully.</p>
+              <p className={styles.notice}>
+                Validation {submissionAction} successfully.
+              </p>
             )}
             {status === "error" && (
               <p role="alert" className={styles.error}>
