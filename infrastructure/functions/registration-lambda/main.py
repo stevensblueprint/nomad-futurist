@@ -17,7 +17,11 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if method == "POST" and resource == "/projects":
         return _response(
             201,
-            {"message": "Project Registration Lambda invoked"},
+            {
+                "message": "Project Registration route not implemented",
+                "method": method,
+                "resource": resource,
+            },
         )
 
     return _response(
@@ -34,8 +38,8 @@ def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     return {
         "statusCode": status_code,
         "headers": {
-            "Content-Type": "application/json"
-            "Access-Control-Allow-Origin": "http://localhost:3000"
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "http://localhost:3000",
             },
         "body": json.dumps(body),
     }

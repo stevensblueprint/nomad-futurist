@@ -1,10 +1,18 @@
 "use client";
 
+
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
+import { useRouter } from "next/navigation";
 import "../lib/amplify";
-import { confirmSignIn, confirmSignUp, signIn, signUp } from "aws-amplify/auth";
+import {
+  autoSignIn,
+  confirmSignIn,
+  confirmSignUp,
+  signIn,
+  signUp,
+} from "aws-amplify/auth";
 
 type FieldName = "email" | "password" | "confirmPassword";
 type FieldErrors = Partial<Record<FieldName, string>>;
@@ -42,6 +50,8 @@ function errorMessage(error: unknown): string {
 }
 
 export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
+  const router = useRouter();
+
   const isSignUp = mode === "sign-up";
   const [errors, setErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState("");
@@ -94,6 +104,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
+    let confirmationSucceeded = false;
 
     if (awaitingConfirmation) {
       const code = String(new FormData(form).get("password") ?? "").trim();
@@ -101,12 +112,32 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
       setLocalAuthError("");
       try {
         await confirmSignUp({ username: pendingEmail, confirmationCode: code });
-        setAwaitingConfirmation(false);
-        setNotice("Confirmed. You can now sign in.");
+        confirmationSucceeded = true;
       } catch (err) {
-        setLocalAuthError(errorMessage(err));
-      } finally {
+        setLocalAuthError(
+          (err as { message?: string })?.message ||
+            "That confirmation code is incorrect.",
+        );
         setSubmitting(false);
+        return;
+      }
+
+      if (confirmationSucceeded) {
+        try {
+          const { isSignedIn } = await autoSignIn();
+          if (isSignedIn) {
+            router.push('/registration');
+          } else {
+            router.push('/sign-in');
+          }
+        } catch {
+          setLocalAuthError("Account verified! Redirecting to sign in...");
+          setTimeout(() => {
+            router.push('/signin');
+          }, 2000);
+        } finally {
+          setSubmitting(false);
+        }
       }
       return;
     }
@@ -122,7 +153,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
 
     const firstInvalidField = Object.keys(nextErrors)[0];
     if (firstInvalidField) {
-      (form.elements.namedItem(firstInvalidField) as HTMLInputElement).focus();
+      (form.elements.namedItem(firstInvalidField) as HTMLInputElement | null)?.focus();
       return;
     }
 
@@ -150,7 +181,10 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
         const { isSignUpComplete, nextStep } = await signUp({
           username: email,
           password,
-          options: { userAttributes: { email } },
+          options: {
+            userAttributes: { email },
+            autoSignIn: true,
+          },
         });
         if (!isSignUpComplete && nextStep.signUpStep === "CONFIRM_SIGN_UP") {
           setPendingEmail(email);

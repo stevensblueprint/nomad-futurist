@@ -18,13 +18,25 @@ class AuthConstruct(Construct):
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
         
-        sender_email = "eli6@stevens.edu"
-        self.ses_identity = ses.EmailIdentity(
-            self, "AuthEmailIdentity", 
-            identity=ses.Identity.email(sender_email)
+        ses_domain = "nomadfuturist.org"
+        sender_email = f"no-reply@{ses_domain}"
+
+        self.ses_identity = ses.EmailIdentity.from_email_identity_name(
+            self, 
+            "AuthEmailIdentity", 
+            ses_domain
         )
 
-        
+        self.post_confirmation_lambda = lambda_.Function(
+            self,
+            "PostConfirmationLambda",
+            runtime =lambda_.Runtime.PYTHON_3_12,
+            handler = "handler.handler",
+            code=lambda_.Code.from_asset(str(FUNCTIONS_ROOT / "post_confirmation")),
+            description="Assigns newly confirmed founders to the Founders Cognito User Group",
+            timeout=cdk.Duration.seconds(10),
+        )
+
         self.user_pool = cognito.CfnUserPool(
             self,
             "CognitoUserPool",
@@ -79,8 +91,31 @@ class AuthConstruct(Construct):
                 email_sending_account="DEVELOPER",
                 source_arn=self.ses_identity.email_identity_arn,
                 from_=f"Nomad Incubator <{sender_email}>"
-            )
+            ),
+            lambda_config = cognito.CfnUserPool.LambdaConfigProperty(
+                post_confirmation=self.post_confirmation_lambda.function_arn,
+            ),
         )
+
+        self.post_confirmation_lambda.add_permission(
+            "CognitoInvokePostConfirmation", 
+            principal=iam.ServicePrincipal("cognito-idp.amazonaws.com"),
+            source_arn=self.user_pool.attr_arn,
+            source_account=cdk.Stack.of(self).account,
+        )
+
+        post_confirmation_policy = iam.Policy(
+            self,
+            "PostConfirmationUserPoolPolicy",
+            statements=[
+                iam.PolicyStatement(
+                    actions=["cognito-idp:AdminAddUserToGroup",],
+                    resources=[self.user_pool.attr_arn,],
+                )
+            ],
+        )
+
+        self.post_confirmation_lambda.role.attach_inline_policy(post_confirmation_policy)
         self.user_pool.node.add_dependency(self.ses_identity)
         self._retain(self.user_pool)
         

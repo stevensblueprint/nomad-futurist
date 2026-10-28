@@ -3,16 +3,26 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AuthForm from "./AuthForm";
 
-const { signIn, confirmSignIn } = vi.hoisted(() => ({
-  signIn: vi.fn(),
-  confirmSignIn: vi.fn(),
-}));
+const { signIn, confirmSignIn, signUp, confirmSignUp, autoSignIn, push } =
+  vi.hoisted(() => ({
+    signIn: vi.fn(),
+    confirmSignIn: vi.fn(),
+    signUp: vi.fn(),
+    confirmSignUp: vi.fn(),
+    autoSignIn: vi.fn(),
+    push: vi.fn(),
+  }));
 
 vi.mock("../lib/amplify", () => ({}));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+}));
+
 vi.mock("aws-amplify/auth", () => ({
-  signUp: vi.fn(),
-  confirmSignUp: vi.fn(),
+  signUp,
+  confirmSignUp,
+  autoSignIn,
   signIn,
   confirmSignIn,
 }));
@@ -152,5 +162,66 @@ describe("AuthForm sign-in challenges", () => {
       await screen.findByText("Additional sign-in verification is required."),
     ).toBeInTheDocument();
     expect(screen.queryByText("Signed in.")).not.toBeInTheDocument();
+  });
+});
+
+describe("AuthForm sign-up confirmation", () => {
+  beforeEach(() => {
+    signUp.mockReset();
+    confirmSignUp.mockReset();
+    autoSignIn.mockReset();
+    push.mockReset();
+  });
+
+  async function reachConfirmationStep(user: ReturnType<typeof userEvent.setup>) {
+    signUp.mockResolvedValue({
+      isSignUpComplete: false,
+      nextStep: { signUpStep: "CONFIRM_SIGN_UP" },
+    });
+
+    render(<AuthForm mode="sign-up" />);
+    await user.type(screen.getByLabelText("Email address"), "new@example.com");
+    await user.type(screen.getByLabelText("Password"), "NewPass1!");
+    await user.type(screen.getByLabelText("Confirm password"), "NewPass1!");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    return screen.findByLabelText("Email code");
+  }
+
+  it("confirms the code, signs in automatically, and opens registration", async () => {
+    const user = userEvent.setup();
+    confirmSignUp.mockResolvedValue({});
+    autoSignIn.mockResolvedValue({ isSignedIn: true });
+
+    await user.type(await reachConfirmationStep(user), "123456");
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/registration"));
+    expect(signUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({ autoSignIn: true }),
+      }),
+    );
+    expect(confirmSignUp).toHaveBeenCalledWith({
+      username: "new@example.com",
+      confirmationCode: "123456",
+    });
+  });
+
+  it("shows the Cognito message and does not redirect when the code is wrong", async () => {
+    const user = userEvent.setup();
+    confirmSignUp.mockRejectedValue(
+      Object.assign(new Error("Invalid verification code provided."), {
+        name: "CodeMismatchException",
+      }),
+    );
+
+    await user.type(await reachConfirmationStep(user), "000000");
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(
+      await screen.findByText("Invalid verification code provided."),
+    ).toBeInTheDocument();
+    expect(autoSignIn).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 });
