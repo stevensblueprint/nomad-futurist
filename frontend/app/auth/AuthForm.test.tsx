@@ -224,4 +224,21 @@ describe("AuthForm sign-up confirmation", () => {
     expect(autoSignIn).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
   });
+
+  it("redirects to the sign-in page when automatic sign-in fails", async () => {
+    const user = userEvent.setup();
+    confirmSignUp.mockResolvedValue({});
+    autoSignIn.mockRejectedValue(new Error("auto sign-in unavailable"));
+
+    await user.type(await reachConfirmationStep(user), "123456");
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(
+      await screen.findByText("Account verified! Redirecting to sign in..."),
+    ).toBeInTheDocument();
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/sign-in"), {
+      timeout: 3000,
+    });
+    expect(push).not.toHaveBeenCalledWith("/signin");
+  });
 });

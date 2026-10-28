@@ -133,7 +133,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
         } catch {
           setLocalAuthError("Account verified! Redirecting to sign in...");
           setTimeout(() => {
-            router.push('/signin');
+            router.push('/sign-in');
           }, 2000);
         } finally {
           setSubmitting(false);
