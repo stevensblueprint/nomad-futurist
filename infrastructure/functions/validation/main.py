@@ -10,6 +10,10 @@ import json
 from typing import Any
 
 
+MOCK_PROJECT_IDS = frozenset({"project-123", "project-456"})
+MOCK_VALIDATION_PROJECT_IDS = frozenset({"project-456"})
+
+
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     method = event.get("httpMethod")
     resource = event.get("resource")
@@ -24,11 +28,39 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             return _response(400, {"message": "Request body must be a JSON object."})
 
         path_parameters = event.get("pathParameters") or {}
+        project_id = path_parameters.get("projectId")
+        if project_id not in MOCK_VALIDATION_PROJECT_IDS:
+            return _response(404, {"message": "Validation not found."})
+
         return _response(
             200,
             {
-                "projectId": path_parameters.get("projectId"),
+                "projectId": project_id,
                 "validation": validation,
+            },
+        )
+
+    if method == "POST" and resource == "/validation/projects/{projectId}":
+        try:
+            validation = json.loads(event.get("body"))
+        except (TypeError, json.JSONDecodeError):
+            return _response(400, {"message": "Request body must be a JSON object."})
+
+        if not isinstance(validation, dict):
+            return _response(400, {"message": "Request body must be a JSON object."})
+
+        path_parameters = event.get("pathParameters") or {}
+        project_id = path_parameters.get("projectId")
+        if project_id not in MOCK_PROJECT_IDS:
+            return _response(404, {"message": "Project not found."})
+
+        action = "updated" if project_id in MOCK_VALIDATION_PROJECT_IDS else "created"
+        return _response(
+            200 if action == "updated" else 201,
+            {
+                "projectId": project_id,
+                "validation": validation,
+                "action": action,
             },
         )
 

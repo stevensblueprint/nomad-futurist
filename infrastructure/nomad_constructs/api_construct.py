@@ -202,6 +202,7 @@ class ApiConstruct(Construct):
         validation_project_by_id = validation_projects.add_resource("{projectId}")
         validation_project_by_id.add_method("GET", validation_integration)
         validation_project_by_id.add_method("PATCH", validation_integration)
+        validation_project_by_id.add_method("POST", validation_integration)
 
 
         cdk.CfnOutput(
