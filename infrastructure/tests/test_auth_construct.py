@@ -34,7 +34,7 @@ class AuthConstructTest(unittest.TestCase):
         )
         template = assertions.Template.from_stack(stack)
 
-        template.resource_count_is("AWS::Lambda::Function", 3)
+        template.resource_count_is("AWS::Lambda::Function", 4)
         resources = template.to_json()["Resources"]
         user_pool_logical_id = next(
             logical_id
@@ -138,6 +138,57 @@ class AuthConstructTest(unittest.TestCase):
             {"Fn::GetAtt": [lambda_logical_id, "Arn"]},
             post_method["Integration"]["Uri"]["Fn::Join"][1],
         )
+
+    def test_nomad_stack_uses_the_existing_nomad_ses_domain(self) -> None:
+        app = cdk.App()
+        template = assertions.Template.from_stack(NomadStack(app, "TestNomadStack"))
+
+        template.resource_count_is("AWS::SES::EmailIdentity", 0)
+        pools = template.find_resources("AWS::Cognito::UserPool")
+        pool = next(iter(pools.values()))
+        email = pool["Properties"]["EmailConfiguration"]
+        self.assertEqual("DEVELOPER", email["EmailSendingAccount"])
+        self.assertEqual("Nomad Incubator <no-reply@nomadfuturist.org>", email["From"])
+        self.assertIn(":identity/nomadfuturist.org", str(email["SourceArn"]))
+        self.assertEqual("Retain", pool["DeletionPolicy"])
+        self.assertEqual("Retain", pool["UpdateReplacePolicy"])
+
+    def test_post_confirmation_keeps_its_trigger_and_standalone_scoped_policy(self) -> None:
+        app = cdk.App()
+        template = assertions.Template.from_stack(NomadStack(app, "TestNomadStack"))
+        resources = template.to_json()["Resources"]
+        pool_id, pool = next(
+            (logical_id, resource)
+            for logical_id, resource in resources.items()
+            if resource["Type"] == "AWS::Cognito::UserPool"
+        )
+        function_id = pool["Properties"]["LambdaConfig"]["PostConfirmation"]["Fn::GetAtt"][0]
+        function = resources[function_id]["Properties"]
+        self.assertEqual("handler.handler", function["Handler"])
+        self.assertEqual("python3.12", function["Runtime"])
+        role_id = function["Role"]["Fn::GetAtt"][0]
+        policies = [
+            resource["Properties"]
+            for resource in resources.values()
+            if resource["Type"] == "AWS::IAM::Policy"
+            and resource["Properties"].get("Roles") == [{"Ref": role_id}]
+        ]
+        self.assertEqual(1, len(policies))
+        self.assertEqual([
+            {
+                "Action": "cognito-idp:AdminAddUserToGroup",
+                "Effect": "Allow",
+                "Resource": {"Fn::GetAtt": [pool_id, "Arn"]},
+            }
+        ], policies[0]["PolicyDocument"]["Statement"])
+        self.assertNotIn("Policies", resources[role_id]["Properties"])
+        template.has_resource_properties("AWS::Lambda::Permission", {
+            "Action": "lambda:InvokeFunction",
+            "FunctionName": {"Fn::GetAtt": [function_id, "Arn"]},
+            "Principal": "cognito-idp.amazonaws.com",
+            "SourceArn": {"Fn::GetAtt": [pool_id, "Arn"]},
+            "SourceAccount": {"Ref": "AWS::AccountId"},
+        })
 
     def test_nomad_stack_exports_non_secret_cognito_configuration(self) -> None:
         app = cdk.App()
