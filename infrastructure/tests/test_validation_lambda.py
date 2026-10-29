@@ -47,7 +47,7 @@ class ValidationLambdaTest(unittest.TestCase):
 
         self.assertEqual(404, result["statusCode"])
         self.assertEqual(
-            {"message": "Validation not found."},
+            {"message": "Validation report not found."},
             json.loads(result["body"]),
         )
 
@@ -66,25 +66,7 @@ class ValidationLambdaTest(unittest.TestCase):
             json.loads(result["body"]),
         )
 
-    def test_validation_post_updates_a_mock_validation_when_one_exists(self) -> None:
-        validation = {"decision": "needs-changes"}
-
-        result = handler(
-            self.event(json.dumps(validation), project_id="project-456", method="POST"),
-            None,
-        )
-
-        self.assertEqual(200, result["statusCode"])
-        self.assertEqual(
-            {
-                "projectId": "project-456",
-                "validation": validation,
-                "action": "updated",
-            },
-            json.loads(result["body"]),
-        )
-
-    def test_validation_post_rejects_an_unknown_mock_project(self) -> None:
+    def test_validation_post_rejects_existing_report(self):
         validation = {"decision": "needs-changes"}
 
         result = handler(
@@ -99,6 +81,22 @@ class ValidationLambdaTest(unittest.TestCase):
         self.assertEqual(409, result["statusCode"])
         self.assertEqual(
             {"message": "Validation report already exists."},
+            json.loads(result["body"]),
+        )
+
+    def test_validation_post_rejects_an_unknown_mock_project(self) -> None:
+        result = handler(
+            self.event(
+                json.dumps({"decision": "approved"}),
+                project_id="missing",
+                method="POST",
+            ),
+            None,
+        )
+
+        self.assertEqual(404, result["statusCode"])
+        self.assertEqual(
+            {"message": "Project not found."},
             json.loads(result["body"]),
         )
 
