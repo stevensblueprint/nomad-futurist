@@ -194,62 +194,62 @@ export default function Registration() {
 
         <form className={styles.form} noValidate onSubmit={submit}>
           <fieldset className={styles.formFields} disabled={pending}>
-          <div className={styles.field}>
-            <label htmlFor="projectName">Project name</label>
-            <input id="projectName" required value={values.projectName} onChange={(e) => change("projectName", e.target.value)} onBlur={() => validateField("projectName")} aria-invalid={Boolean(errors.projectName)} aria-describedby={errors.projectName ? "projectName-error" : undefined} />
-            {errors.projectName && <p id="projectName-error" className={styles.error}>{errors.projectName}</p>}
-          </div>
+            <div className={styles.field}>
+              <label htmlFor="projectName">Project name</label>
+              <input id="projectName" required value={values.projectName} onChange={(e) => change("projectName", e.target.value)} onBlur={() => validateField("projectName")} aria-invalid={Boolean(errors.projectName)} aria-describedby={errors.projectName ? "projectName-error" : undefined} />
+              {errors.projectName && <p id="projectName-error" className={styles.error}>{errors.projectName}</p>}
+            </div>
 
-          <div className={styles.field}>
-            <label htmlFor="description">Project description</label>
-            <textarea id="description" required rows={4} value={values.description} onChange={(e) => change("description", e.target.value)} onBlur={() => validateField("description")} aria-invalid={Boolean(errors.description)} aria-describedby={errors.description ? "description-error" : undefined} />
-            {errors.description && <p id="description-error" className={styles.error}>{errors.description}</p>}
-          </div>
+            <div className={styles.field}>
+              <label htmlFor="description">Project description</label>
+              <textarea id="description" required rows={4} value={values.description} onChange={(e) => change("description", e.target.value)} onBlur={() => validateField("description")} aria-invalid={Boolean(errors.description)} aria-describedby={errors.description ? "description-error" : undefined} />
+              {errors.description && <p id="description-error" className={styles.error}>{errors.description}</p>}
+            </div>
 
-          <div className={styles.field}>
-            <label htmlFor="linkedInUrl">Project or company URL <span>(optional)</span></label>
-            <input id="linkedInUrl" type="url" inputMode="url" value={values.linkedInUrl} onChange={(e) => change("linkedInUrl", e.target.value)} onBlur={() => validateField("linkedInUrl")} aria-invalid={Boolean(errors.linkedInUrl)} aria-describedby={errors.linkedInUrl ? "linkedInUrl-error" : undefined} />
-            {errors.linkedInUrl && <p id="linkedInUrl-error" className={styles.error}>{errors.linkedInUrl}</p>}
-          </div>
+            <div className={styles.field}>
+              <label htmlFor="linkedInUrl">Project or company URL <span>(optional)</span></label>
+              <input id="linkedInUrl" type="url" inputMode="url" value={values.linkedInUrl} onChange={(e) => change("linkedInUrl", e.target.value)} onBlur={() => validateField("linkedInUrl")} aria-invalid={Boolean(errors.linkedInUrl)} aria-describedby={errors.linkedInUrl ? "linkedInUrl-error" : undefined} />
+              {errors.linkedInUrl && <p id="linkedInUrl-error" className={styles.error}>{errors.linkedInUrl}</p>}
+            </div>
 
-          <div className={styles.field}>
-            <label htmlFor="supportType">Support type</label>
-            <select id="supportType" required value={values.supportType} onChange={(e) => change("supportType", e.target.value as RegistrationValues["supportType"])} onBlur={() => validateField("supportType")} aria-invalid={Boolean(errors.supportType)} aria-describedby={errors.supportType ? "supportType-error" : undefined}>
-              <option value="human_capital">Human capital</option>
-              <option value="funding">Funding</option>
-              <option value="both">Funding and human capital</option>
-            </select>
-            {errors.supportType && <p id="supportType-error" className={styles.error}>{errors.supportType}</p>}
-          </div>
+            <div className={styles.field}>
+              <label htmlFor="supportType">Support type</label>
+              <select id="supportType" required value={values.supportType} onChange={(e) => change("supportType", e.target.value as RegistrationValues["supportType"])} onBlur={() => validateField("supportType")} aria-invalid={Boolean(errors.supportType)} aria-describedby={errors.supportType ? "supportType-error" : undefined}>
+                <option value="human_capital">Human capital</option>
+                <option value="funding">Funding</option>
+                <option value="both">Funding and human capital</option>
+              </select>
+              {errors.supportType && <p id="supportType-error" className={styles.error}>{errors.supportType}</p>}
+            </div>
 
-          <div className={styles.field}>
-            <label htmlFor="needs">What assistance do you need?</label>
-            <textarea id="needs" required rows={3} value={values.needs} onChange={(e) => change("needs", e.target.value)} onBlur={() => validateField("needs")} aria-invalid={Boolean(errors.needs)} aria-describedby={errors.needs ? "needs-error" : undefined} />
-            {errors.needs && <p id="needs-error" className={styles.error}>{errors.needs}</p>}
-          </div>
+            <div className={styles.field}>
+              <label htmlFor="needs">What assistance do you need?</label>
+              <textarea id="needs" required rows={3} value={values.needs} onChange={(e) => change("needs", e.target.value)} onBlur={() => validateField("needs")} aria-invalid={Boolean(errors.needs)} aria-describedby={errors.needs ? "needs-error" : undefined} />
+              {errors.needs && <p id="needs-error" className={styles.error}>{errors.needs}</p>}
+            </div>
 
-          {values.supportType !== "human_capital" && (
-            <fieldset className={styles.funding}>
-              <legend>Requested funding (USD)</legend>
-              <div className={styles.fundingFields}>
-                {(["minimum", "maximum"] as const).map((field) => (
-                  <div className={styles.field} key={field}>
-                    <label htmlFor={field}>{field === "minimum" ? "Minimum" : "Maximum"} amount (USD)</label>
-                    <input id={field} required type="number" min="0" step="any" inputMode="decimal" value={values[field]} onChange={(e) => change(field, e.target.value)} onBlur={() => validateField(field)} aria-invalid={Boolean(errors[field])} aria-describedby={errors[field] ? `${field}-error` : undefined} />
-                    {errors[field] && <p id={`${field}-error`} className={styles.error}>{errors[field]}</p>}
-                  </div>
-                ))}
-              </div>
-            </fieldset>
-          )}
+            {values.supportType !== "human_capital" && (
+              <fieldset className={styles.funding}>
+                <legend>Requested funding (USD)</legend>
+                <div className={styles.fundingFields}>
+                  {(["minimum", "maximum"] as const).map((field) => (
+                    <div className={styles.field} key={field}>
+                      <label htmlFor={field}>{field === "minimum" ? "Minimum" : "Maximum"} amount (USD)</label>
+                      <input id={field} required type="number" min="0" step="any" inputMode="decimal" value={values[field]} onChange={(e) => change(field, e.target.value)} onBlur={() => validateField(field)} aria-invalid={Boolean(errors[field])} aria-describedby={errors[field] ? `${field}-error` : undefined} />
+                      {errors[field] && <p id={`${field}-error`} className={styles.error}>{errors[field]}</p>}
+                    </div>
+                  ))}
+                </div>
+              </fieldset>
+            )}
 
-          <div className={styles.placeholder}>
-            <strong>Vision document</strong>
-            <span>Document upload will be available later.</span>
-          </div>
+            <div className={styles.placeholder}>
+              <strong>Vision document</strong>
+              <span>Document upload will be available later.</span>
+            </div>
           </fieldset>
           <p className={styles.formStatus} role={success ? "status" : "alert"} aria-live="polite" aria-atomic="true">{status}</p>
-          <button className={styles.submit} type="submit" disabled={pending || Object.keys(validateRegistration(values)).length > 0 || (success && JSON.stringify(values) === lastSuccessfulValues)}>
+          <button className={styles.submit} type="submit" disabled={pending || (success && JSON.stringify(values) === lastSuccessfulValues)}>
             {pending ? "Submitting…" : "Submit registration"}
           </button>
         </form>
