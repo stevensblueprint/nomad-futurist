@@ -69,6 +69,25 @@
   line-height: 1.5;
 }
 
+.errorNotice {
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  color: #b42318;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.errorTitle {
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .notice {
   font-size: 0.875rem;
   line-height: 1.5;
@@ -114,7 +133,8 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  .error {
+  .error,
+  .errorNotice {
     color: #ffb4ab;
   }
 

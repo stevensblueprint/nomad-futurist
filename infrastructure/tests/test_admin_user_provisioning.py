@@ -27,7 +27,10 @@ class AdminUserProvisioningTest(unittest.TestCase):
     def response(status_code, message):
         return {
             "statusCode": status_code,
-            "headers": {"Content-Type": "application/json"},
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "http://localhost:3000",
+            },
             "body": json.dumps({"message": message}),
         }
 

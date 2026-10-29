@@ -11,14 +11,17 @@ from aws_cdk import (
     aws_logs as logs,
 )
 from constructs import Construct
+from nomad_constructs.lambda_asset import python_lambda_code
 
 
 FUNCTIONS_ROOT = Path(__file__).resolve().parent.parent / "functions"
+DEFAULT_FRONTEND_ORIGIN = "http://localhost:3000"
 
 
 class ApiConstruct(Construct):
     def __init__(self, scope: Construct, construct_id: str, *, user_pool_id: str, admin_user_provisioning_lambda: lambda_.IFunction,) -> None:
         super().__init__(scope, construct_id)
+        frontend_origin = DEFAULT_FRONTEND_ORIGIN
         
         registration_lambda_role = iam.Role(
             self,
@@ -60,15 +63,14 @@ class ApiConstruct(Construct):
             "ProjectRegistrationLambda",
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="main.handler",
-            code=lambda_.Code.from_asset(
-                str(FUNCTIONS_ROOT / "registration-lambda")
-            ),
+            code=python_lambda_code(FUNCTIONS_ROOT / "registration-lambda"),
             role=registration_lambda_role,
             memory_size=256,
             timeout=cdk.Duration.seconds(10),
             architecture=lambda_.Architecture.ARM_64,
             environment={
                 "ENVIRONMENT": "development",
+                "FRONTEND_ORIGIN": frontend_origin,
             },
             log_group=registration_log_group,
         )
@@ -78,9 +80,7 @@ class ApiConstruct(Construct):
             "ProjectValidationLambda",
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="main.handler",
-            code=lambda_.Code.from_asset(
-                str(FUNCTIONS_ROOT / "validation-lambda")
-            ),
+            code=python_lambda_code(FUNCTIONS_ROOT / "validation-lambda"),
             role=validation_lambda_role,
             memory_size=256,
             timeout=cdk.Duration.seconds(10),
@@ -126,9 +126,7 @@ class ApiConstruct(Construct):
                 ),
             ),
             default_cors_preflight_options=apigw.CorsOptions(
-                allow_origins=[
-                    "http://localhost:3000" # Development -> Will change to CloudFront Distribution later
-                ],
+                allow_origins=[frontend_origin],
                 allow_methods=[
                     "GET",
                     "POST",
@@ -150,6 +148,21 @@ class ApiConstruct(Construct):
             self, "CognitoAuthorizer", cognito_user_pools=[user_pool],
         )
 
+        # Errors rejected by API Gateway never reach the Lambda's CORS headers.
+        for response_id, response_type in (
+            ("DefaultClientError", apigw.ResponseType.DEFAULT_4_XX),
+            ("DefaultServerError", apigw.ResponseType.DEFAULT_5_XX),
+        ):
+            api.add_gateway_response(
+                response_id,
+                type=response_type,
+                response_headers={
+                    "Access-Control-Allow-Origin": f"'{frontend_origin}'",
+                    "Access-Control-Allow-Headers": "'Content-Type,Authorization'",
+                    "Access-Control-Allow-Methods": "'GET,POST,PATCH,OPTIONS'",
+                },
+            )
+
         registration_integration = apigw.LambdaIntegration(
             registration_lambda, proxy=True,
         )
@@ -167,7 +180,11 @@ class ApiConstruct(Construct):
 
         # Project Registration routes -> ProjectRegistrationLambda
         projects = api.root.add_resource("projects")
-        projects.add_method("POST", registration_integration)
+        projects.add_method(
+            "POST", registration_integration,
+            authorization_type=apigw.AuthorizationType.COGNITO,
+            authorizer=authorizer,
+        )
         projects.add_method("GET", registration_integration)
 
         project_by_id = projects.add_resource("{projectId}")
