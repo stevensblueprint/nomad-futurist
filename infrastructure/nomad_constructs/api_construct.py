@@ -63,7 +63,7 @@ class ApiConstruct(Construct):
             "ProjectRegistrationLambda",
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="main.handler",
-            code=python_lambda_code(FUNCTIONS_ROOT / "registration-lambda"),
+            code=python_lambda_code(FUNCTIONS_ROOT / "registration"),
             role=registration_lambda_role,
             memory_size=256,
             timeout=cdk.Duration.seconds(10),
@@ -80,7 +80,7 @@ class ApiConstruct(Construct):
             "ProjectValidationLambda",
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="main.handler",
-            code=python_lambda_code(FUNCTIONS_ROOT / "validation-lambda"),
+            code=python_lambda_code(FUNCTIONS_ROOT / "validation"),
             role=validation_lambda_role,
             memory_size=256,
             timeout=cdk.Duration.seconds(10),
@@ -202,6 +202,7 @@ class ApiConstruct(Construct):
         validation_project_by_id = validation_projects.add_resource("{projectId}")
         validation_project_by_id.add_method("GET", validation_integration)
         validation_project_by_id.add_method("PATCH", validation_integration)
+        validation_project_by_id.add_method("POST", validation_integration)
 
 
         cdk.CfnOutput(
