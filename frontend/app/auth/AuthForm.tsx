@@ -127,7 +127,7 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
           setErrors({});
           try {
             const { isSignedIn } = await autoSignIn();
-            router.push(isSignedIn ? "/registration" : "/sign-in");
+            router.push(isSignedIn ? "/" : "/sign-in");
           } catch {
             router.push("/sign-in");
           }
@@ -190,17 +190,17 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
     { name: "email", label: "Email address", type: "email", autoComplete: "email", readOnly: true },
     { name: "confirmationCode", label: "Confirmation code", type: "text", inputMode: "numeric", autoComplete: "one-time-code" },
   ] : [
-    { name: "email", label: "Email address", type: "email", autoComplete: "email" },
-    {
-      name: "password",
-      label: "Password",
-      type: "password",
-      autoComplete: isSignUp ? "new-password" : "current-password",
-    },
-    ...(isSignUp
-      ? [{ name: "confirmPassword" as const, label: "Confirm password", type: "password" as const, autoComplete: "new-password" }]
-      : []),
-  ];
+      { name: "email", label: "Email address", type: "email", autoComplete: "email" },
+      {
+        name: "password",
+        label: "Password",
+        type: "password",
+        autoComplete: isSignUp ? "new-password" : "current-password",
+      },
+      ...(isSignUp
+        ? [{ name: "confirmPassword" as const, label: "Confirm password", type: "password" as const, autoComplete: "new-password" }]
+        : []),
+    ];
 
   if (checkingSession) {
     return (
@@ -286,12 +286,12 @@ export default function AuthForm({ mode, authenticationError }: AuthFormProps) {
 
           <button type="submit" className={styles.submit} disabled={submitting}>
             {submitting
-            ? "Please wait..."
-            : awaitingConfirmation ?
-            "Confirm"
-            : isSignUp ? 
-            "Create account" : 
-            "Sign in"}
+              ? "Please wait..."
+              : awaitingConfirmation ?
+                "Confirm"
+                : isSignUp ?
+                  "Create account" :
+                  "Sign in"}
           </button>
         </form>
 
