@@ -54,7 +54,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         if project_id not in MOCK_PROJECT_IDS:
             return _response(404, {"message": "Project not found."})
         elif project_id in MOCK_VALIDATION_PROJECT_IDS:
-            return _response(409, {"message": "Project already exists."})
+            return _response(409, {"message": "Validation report already exists."})
 
         return _response(
             201,
