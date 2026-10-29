@@ -30,7 +30,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         path_parameters = event.get("pathParameters") or {}
         project_id = path_parameters.get("projectId")
         if project_id not in MOCK_VALIDATION_PROJECT_IDS:
-            return _response(404, {"message": "Validation not found."})
+            return _response(404, {"message": "Validation report not found."})
 
         return _response(
             200,
@@ -53,14 +53,15 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         project_id = path_parameters.get("projectId")
         if project_id not in MOCK_PROJECT_IDS:
             return _response(404, {"message": "Project not found."})
+        elif project_id in MOCK_VALIDATION_PROJECT_IDS:
+            return _response(409, {"message": "Project already exists."})
 
-        action = "updated" if project_id in MOCK_VALIDATION_PROJECT_IDS else "created"
         return _response(
-            200 if action == "updated" else 201,
+            201,
             {
                 "projectId": project_id,
                 "validation": validation,
-                "action": action,
+                "action": "created",
             },
         )
 
