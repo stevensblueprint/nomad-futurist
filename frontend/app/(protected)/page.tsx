@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchAuthSession, signOut } from "aws-amplify/auth";
-import "./auth/amplify-config";
-import styles from "./Home.module.css";
-import AuthErrorNotice from "./auth/AuthErrorNotice";
+import "../auth/amplify-config";
+import styles from "../Home.module.css";
+import AuthErrorNotice from "../auth/AuthErrorNotice";
 
 type HomeAccess = "checking" | "founder" | "other" | "signed-out";
 

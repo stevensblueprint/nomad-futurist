@@ -1,17 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Albert_Sans, Poppins } from "next/font/google";
 import "./globals.css";
-import ConfigureAmplify from "./ConfigureAmplify"
+import ConfigureAmplify from "./ConfigureAmplify";
 
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const albertSans = Albert_Sans({
   subsets: ["latin"],
+  variable: "--next-albert",
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const poppins = Poppins({
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--next-poppins",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -23,11 +25,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${albertSans.variable} ${poppins.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col font-sans">
         <ConfigureAmplify />
-        {children}</body>
+        {children}
+      </body>
     </html>
   );
 }
