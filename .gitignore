@@ -24,3 +24,4 @@ cdk.out/
 
 # flake lock
 flake.lock
+*.tsbuildinfo
