@@ -1,0 +1,22 @@
+.button {
+  width: 100%;
+  min-height: var(--nf-control-height);
+  border: 0;
+  border-radius: var(--nf-radius);
+  background: var(--nf-navy);
+  color: white;
+  font: 600 14px var(--nf-font-body);
+  cursor: pointer;
+}
+.button:hover:not(:disabled) {
+  background: var(--nf-ink);
+}
+.button:focus-visible {
+  outline: 3px solid var(--nf-copper);
+  outline-offset: 2px;
+}
+.button:disabled {
+  background: var(--nf-border);
+  color: var(--nf-muted);
+  cursor: not-allowed;
+}

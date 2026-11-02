@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import AuthLayout from "./AuthLayout";
+import FormField from "../../components/ui/FormField";
+import PrimaryButton from "../../components/ui/PrimaryButton";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
 import AuthErrorNotice from "./AuthErrorNotice";
 import { authErrorMessage } from "./auth-errors";
-import { getSignInOutcome, passwordRequirements, validatePassword } from "./authLogic";
+import { getSignInOutcome, validatePassword } from "./authLogic";
 import "./amplify-config";
 import { autoSignIn, confirmSignUp, fetchAuthSession, signIn, signUp } from "aws-amplify/auth";
 type FieldName = "email" | "password" | "confirmPassword" | "confirmationCode";
@@ -61,14 +64,14 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
 
   function validate(form: HTMLFormElement): FieldErrors {
     const data = new FormData(form);
-    const email = String(data.get("email") ?? "").trim();
+    const email = awaitingConfirmation ? pendingEmail : String(data.get("email") ?? "").trim();
     const password = String(data.get("password") ?? "");
     const confirmation = String(data.get("confirmPassword") ?? "");
     const emailInput = form.elements.namedItem("email") as HTMLInputElement;
     const nextErrors: FieldErrors = {};
 
     if (!email) nextErrors.email = "Enter your email address.";
-    else if (emailInput.validity.typeMismatch)
+    else if (!awaitingConfirmation && emailInput.validity.typeMismatch)
       nextErrors.email = "Enter a valid email address.";
 
     if (awaitingConfirmation) {
@@ -186,22 +189,40 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
     autoComplete: string;
     type: "email" | "password" | "text";
     inputMode?: "numeric";
-    readOnly?: boolean;
-  }[] = awaitingConfirmation ? [
-    { name: "email", label: "Email address", type: "email", autoComplete: "email", readOnly: true },
-    { name: "confirmationCode", label: "Confirmation code", type: "text", inputMode: "numeric", autoComplete: "one-time-code" },
-  ] : [
-      { name: "email", label: "Email address", type: "email", autoComplete: "email" },
-      {
-        name: "password",
-        label: "Password",
-        type: "password",
-        autoComplete: isSignUp ? "new-password" : "current-password",
-      },
-      ...(isSignUp
-        ? [{ name: "confirmPassword" as const, label: "Confirm password", type: "password" as const, autoComplete: "new-password" }]
-        : []),
-    ];
+  }[] = awaitingConfirmation
+    ? [
+        {
+          name: "confirmationCode",
+          label: "Confirmation code",
+          type: "text",
+          inputMode: "numeric",
+          autoComplete: "one-time-code",
+        },
+      ]
+    : [
+        {
+          name: "email",
+          label: "Email address",
+          type: "email",
+          autoComplete: "email",
+        },
+        {
+          name: "password",
+          label: "Password",
+          type: "password",
+          autoComplete: isSignUp ? "new-password" : "current-password",
+        },
+        ...(isSignUp
+          ? [
+              {
+                name: "confirmPassword" as const,
+                label: "Confirm password",
+                type: "password" as const,
+                autoComplete: "new-password",
+              },
+            ]
+          : []),
+      ];
 
   if (checkingSession) {
     return (
@@ -212,97 +233,164 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
   }
 
   return (
-    <main className={styles.page}>
-      <section className={styles.content} aria-labelledby="auth-heading">
-        <header className={styles.header}>
-          <h1 id="auth-heading">{isSignUp ? "Sign up" : "Sign in"}</h1>
-          <p>
-            {isSignUp
-              ? "Create your founder account."
-              : "Welcome back to Nomad Incubator."}
-          </p>
-        </header>
+    <AuthLayout>
+      <header className={styles.header}>
+        <h1 id="auth-heading">
+          {awaitingConfirmation
+            ? "Check your email"
+            : isSignUp
+              ? "Create your account"
+              : "Welcome back"}
+        </h1>
+        <p>
+          {awaitingConfirmation
+            ? `We sent a code to ${pendingEmail}. Enter it below to confirm your account.`
+            : isSignUp
+              ? "Start your journey as a founder."
+              : "Sign in to your Nomad Incubator account."}
+        </p>
+      </header>
 
-        <form
-          noValidate
-          onSubmit={handleSubmit}
-          onChange={(event) => {
-            setNotice("");
-            setLocalAuthError("");
-            setValidationSummary((current) => ({ ...current, message: "" }));
-            const nextErrors = validate(event.currentTarget);
-            setErrors((currentErrors) => {
-              const remainingErrors: FieldErrors = {};
-              // Recheck existing errors without introducing new ones until submit.
-              for (const field of Object.keys(currentErrors) as FieldName[]) {
-                if (nextErrors[field]) remainingErrors[field] = nextErrors[field];
-              }
-              return remainingErrors;
-            });
-          }}
-          className={styles.form}
-        >
-          <div className="sr-only" aria-live="assertive" aria-atomic="true">
-            {validationSummary.message && (
-              // Replace the message on each submit, even if the errors are unchanged.
-              <p key={validationSummary.submission}>{validationSummary.message}</p>
-            )}
-          </div>
-          {fields.map(({ name, label, autoComplete, type, inputMode, readOnly }) => (
-            <div className={styles.field} key={`${name}-${awaitingConfirmation}`}>
-              <label htmlFor={name}>{label}</label>
-              {name === "password" && isSignUp && (
-                <ul id="password-requirements" className={styles.requirements}>
-                  {passwordRequirements.map(({ message }) => <li key={message}>{message}</li>)}
-                </ul>
-              )}
+      {awaitingConfirmation && (
+        <div className={styles.confirmNotice}>
+          <strong>One more step to get started</strong>
+          <p>Check your inbox and spam folder.</p>
+        </div>
+      )}
+      <form
+        noValidate
+        onSubmit={handleSubmit}
+        onChange={(event) => {
+          setNotice("");
+          setLocalAuthError("");
+          setValidationSummary((current) => ({ ...current, message: "" }));
+          const nextErrors = validate(event.currentTarget);
+          setErrors((currentErrors) => {
+            const remainingErrors: FieldErrors = {};
+            // Recheck existing errors without introducing new ones until submit.
+            for (const field of Object.keys(currentErrors) as FieldName[]) {
+              if (nextErrors[field]) remainingErrors[field] = nextErrors[field];
+            }
+            return remainingErrors;
+          });
+        }}
+        className={styles.form}
+      >
+        <div className="sr-only" aria-live="assertive" aria-atomic="true">
+          {validationSummary.message && (
+            // Replace the message on each submit, even if the errors are unchanged.
+            <p key={validationSummary.submission}>
+              {validationSummary.message}
+            </p>
+          )}
+        </div>
+        {fields.map(
+          ({ name, label, autoComplete, type, inputMode }) => (
+            <FormField
+              key={`${name}-${awaitingConfirmation}`}
+              id={name}
+              label={label}
+              error={errors[name]}
+            >
               <input
                 id={name}
                 name={name}
                 type={type}
                 inputMode={inputMode}
                 autoComplete={autoComplete}
-                readOnly={readOnly}
-                defaultValue={name === "email" && awaitingConfirmation ? pendingEmail : undefined}
+                placeholder={
+                  name === "email"
+                    ? "you@example.com"
+                    : name === "confirmationCode"
+                      ? "Enter your code"
+                      : name === "confirmPassword"
+                        ? "Re-enter your password"
+                        : "Enter your password"
+                }
+                autoFocus={name === "confirmationCode"}
                 required
                 disabled={submitting}
                 aria-invalid={Boolean(errors[name])}
-                aria-describedby={[
-                  errors[name] ? `${name}-error` : undefined,
-                  name === "password" && isSignUp ? "password-requirements" : undefined,
-                ].filter(Boolean).join(" ") || undefined}
+                aria-describedby={
+                  [
+                    errors[name] ? `${name}-error` : undefined,
+                    name === "password" && isSignUp
+                      ? "password-requirements"
+                      : undefined,
+                    name === "confirmationCode" ? "code-help" : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
               />
-              {errors[name] && (
-                <p id={`${name}-error`} className={styles.error}>
-                  {errors[name]}
+              {name === "password" && isSignUp && (
+                <p id="password-requirements" className={styles.requirements}>
+                  At least 8 characters, including uppercase and lowercase
+                  letters, a number, and a special character.
                 </p>
               )}
-            </div>
-          ))}
+              {name === "confirmationCode" && (
+                <p id="code-help" className={styles.requirements}>
+                  Use the code from your confirmation email.
+                </p>
+              )}
+            </FormField>
+          ),
+        )}
 
-          <AuthErrorNotice message={displayedError} />
-          <div aria-live="polite" aria-atomic="true">
-            {notice && <p className={styles.notice}>{notice}</p>}
-          </div>
+        <AuthErrorNotice message={displayedError} />
+        <div
+          aria-live="polite"
+          aria-atomic="true"
+          className={
+            awaitingConfirmation
+              ? "sr-only"
+              : !notice
+                ? styles.emptyFeedback
+                : undefined
+          }
+        >
+          {notice && <p className={styles.notice}>{notice}</p>}
+        </div>
 
-          <button type="submit" className={styles.submit} disabled={submitting}>
-            {submitting
-              ? "Please wait..."
-              : awaitingConfirmation ?
-                "Confirm"
-                : isSignUp ?
-                  "Create account" :
-                  "Sign in"}
-          </button>
-        </form>
+        <PrimaryButton
+          type="submit"
+          loading={submitting}
+          loadingLabel={
+            awaitingConfirmation
+              ? "Confirming…"
+              : isSignUp
+                ? "Creating account…"
+                : "Signing in…"
+          }
+        >
+          {awaitingConfirmation
+            ? "Confirm email"
+            : isSignUp
+              ? "Create founder account"
+              : "Sign in"}
+        </PrimaryButton>
+      </form>
 
-        <p className={styles.footer}>
-          {isSignUp ? "Already have an account? " : "Need an account? "}
-          <Link href={isSignUp ? "/sign-in" : "/sign-up"}>
-            {isSignUp ? "Sign in" : "Sign up"}
-          </Link>
+      <p className={styles.footer}>
+        {awaitingConfirmation
+          ? ""
+          : isSignUp
+            ? "Already have an account? "
+            : "New to Nomad? "}
+        <Link href={isSignUp ? "/sign-in" : "/sign-up"}>
+          {awaitingConfirmation
+            ? "Return to sign in"
+            : isSignUp
+              ? "Sign in"
+              : "Create an account"}
+        </Link>
+      </p>
+      {awaitingConfirmation && (
+        <p className={styles.explanation}>
+          You’ll be signed in automatically when confirmation succeeds.
         </p>
-      </section>
-    </main>
+      )}
+    </AuthLayout>
   );
 }
