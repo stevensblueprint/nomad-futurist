@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import AuthLayout from "./AuthLayout";
-import FormField from "../../components/ui/FormField";
-import PrimaryButton from "../../components/ui/PrimaryButton";
+import FormField from "../components/auth/FormField";
+import PrimaryButton from "../components/auth/PrimaryButton";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import styles from "./AuthForm.module.css";
@@ -190,7 +190,7 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
     type: "email" | "password" | "text";
     inputMode?: "numeric";
   }[] = awaitingConfirmation
-    ? [
+      ? [
         {
           name: "confirmationCode",
           label: "Confirmation code",
@@ -199,7 +199,7 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
           autoComplete: "one-time-code",
         },
       ]
-    : [
+      : [
         {
           name: "email",
           label: "Email address",
@@ -214,13 +214,13 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
         },
         ...(isSignUp
           ? [
-              {
-                name: "confirmPassword" as const,
-                label: "Confirm password",
-                type: "password" as const,
-                autoComplete: "new-password",
-              },
-            ]
+            {
+              name: "confirmPassword" as const,
+              label: "Confirm password",
+              type: "password" as const,
+              autoComplete: "new-password",
+            },
+          ]
           : []),
       ];
 
