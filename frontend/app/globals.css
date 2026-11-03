@@ -6,10 +6,8 @@
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-albert-sans);
+  --font-mono: ui-monospace, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,5 +20,22 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--nf-font-body);
+}
+
+:root {
+  --nf-copper: #b67947;
+  --nf-navy: #022c3f;
+  --nf-ink: #101012;
+  --nf-muted: #464950;
+  --nf-border: #d8dce0;
+  --nf-soft: #f4f6f7;
+  --nf-error: #a52c29;
+  --nf-font-body: var(--font-albert-sans), Arial, sans-serif;
+  --nf-font-heading: var(--font-poppins), Arial, sans-serif;
+  --nf-radius: 8px;
+  --nf-control-height: 48px;
+  --nf-space-label: 8px;
+  --nf-space-field: 20px;
+  --nf-space-section: 24px;
 }
