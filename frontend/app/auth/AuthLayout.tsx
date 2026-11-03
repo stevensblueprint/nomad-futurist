@@ -9,7 +9,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         className={styles.brandPanel}
         aria-label="Nomad Futurist Foundation"
       >
-        <Image src="/nomad-logo.png" width="144" height="144" alt="" />
+        <Image src="/assets/nomad-logo.png" width="144" height="144" alt="" />
         <div className={styles.brandCopy}>
           <h2>
             Build what
@@ -27,7 +27,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <section className={styles.region} aria-labelledby="auth-heading">
         <div className={styles.content}>
           <div className={styles.mobileBrand}>
-            <Image src="/nomad-logo.png" width="48" height="48" alt="" /> NOMAD
+            <Image src="/assets/nomad-logo.png" width="48" height="48" alt="" /> NOMAD
             FUTURIST
           </div>
           {children}

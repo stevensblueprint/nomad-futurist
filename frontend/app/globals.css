@@ -39,19 +39,3 @@ body {
   --nf-space-field: 20px;
   --nf-space-section: 24px;
 }
-
-@font-face {
-  font-family: "NF Poppins";
-  src: url("/fonts/poppins-semibold.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "NF Albert Sans";
-  src: url("/fonts/albert-sans.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-}
