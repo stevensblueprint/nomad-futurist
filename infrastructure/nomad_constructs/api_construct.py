@@ -197,12 +197,19 @@ class ApiConstruct(Construct):
         # Project Validation routes -> ProjectValidationLambda
         validation = api.root.add_resource("validation")
         validation_projects = validation.add_resource("projects")
-        validation_projects.add_method("GET", validation_integration)
+        validation_projects.add_method(
+            "GET", validation_integration,
+            authorization_type=apigw.AuthorizationType.COGNITO,
+            authorizer=authorizer,
+        )
 
         validation_project_by_id = validation_projects.add_resource("{projectId}")
-        validation_project_by_id.add_method("GET", validation_integration)
-        validation_project_by_id.add_method("PATCH", validation_integration)
-        validation_project_by_id.add_method("POST", validation_integration)
+        for method in ("GET", "PATCH", "POST"):
+            validation_project_by_id.add_method(
+                method, validation_integration,
+                authorization_type=apigw.AuthorizationType.COGNITO,
+                authorizer=authorizer,
+            )
 
 
         cdk.CfnOutput(
