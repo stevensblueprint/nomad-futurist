@@ -7,7 +7,7 @@ CREATE TABLE tasks (
     title            text        NOT NULL,
     description      text,
     priority         text,
-    status           text        NOT NULL DEFAULT 'todo',
+    status           text        NOT NULL DEFAULT 'request_submitted',
     assigned_at      timestamptz,
     due_at           timestamptz,
     completed_at     timestamptz,
@@ -21,8 +21,9 @@ CREATE TABLE tasks (
         REFERENCES users (user_id) ON DELETE RESTRICT,
     CONSTRAINT fk_tasks_assigned_by FOREIGN KEY (assigned_by_id)
         REFERENCES users (user_id) ON DELETE RESTRICT,
-    CONSTRAINT ck_tasks_status CHECK (status IN ('todo', 'in_progress', 'done', 'cancelled')),
-    CONSTRAINT ck_tasks_priority CHECK (priority IS NULL OR priority IN ('low', 'medium', 'high'))
+    CONSTRAINT ck_tasks_status CHECK (status IN ('request_submitted', 'under_review', 'unassigned', 'assigned',
+                                                 'in_progress', 'blocked', 'completed', 'cancelled')),
+    CONSTRAINT ck_tasks_priority CHECK (priority IS NULL OR priority IN ('critical', 'standard'))
 );
 
 CREATE INDEX idx_tasks_project_id ON tasks (project_id);

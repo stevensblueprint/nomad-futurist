@@ -18,7 +18,7 @@ CREATE TABLE validation (
         REFERENCES users (user_id) ON DELETE RESTRICT,
     CONSTRAINT fk_validation_updated_by FOREIGN KEY (updated_by)
         REFERENCES users (user_id) ON DELETE RESTRICT,
-    CONSTRAINT ck_validation_verdict CHECK (verdict IN ('approved', 'rejected', 'needs_revision')),
+    CONSTRAINT ck_validation_verdict CHECK (verdict IN ('approved', 'needs_revision', 'declined')),
     CONSTRAINT ck_validation_score CHECK (score IS NULL OR score BETWEEN 1 AND 10)
 );
 

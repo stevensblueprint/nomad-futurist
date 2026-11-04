@@ -16,7 +16,7 @@ CREATE TABLE projects (
         REFERENCES users (user_id) ON DELETE RESTRICT,
     CONSTRAINT ck_projects_support_type CHECK (support_type IN ('funding', 'human_capital', 'both')),
     CONSTRAINT ck_projects_status CHECK (status IN
-        ('draft', 'submitted', 'under_review', 'needs_revision', 'approved', 'rejected')),
+        ('draft', 'pending', 'under_review', 'approved', 'declined', 'archived')),
     CONSTRAINT ck_projects_funding_min_nonneg CHECK (funding_min IS NULL OR funding_min >= 0),
     CONSTRAINT ck_projects_funding_max_nonneg CHECK (funding_max IS NULL OR funding_max >= 0),
     CONSTRAINT ck_projects_funding_range CHECK
