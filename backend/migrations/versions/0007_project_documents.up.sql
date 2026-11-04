@@ -14,3 +14,4 @@ CREATE TABLE project_documents (
 );
 
 CREATE INDEX idx_project_documents_project_id ON project_documents (project_id);
+CREATE INDEX idx_project_documents_uploaded_by ON project_documents (uploaded_by);

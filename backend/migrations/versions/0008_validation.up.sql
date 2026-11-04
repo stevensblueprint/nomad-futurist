@@ -24,5 +24,7 @@ CREATE TABLE validation (
 
 CREATE INDEX idx_validation_reviewer_id ON validation (reviewer_id);
 
+CREATE INDEX idx_validation_updated_by ON validation (updated_by);
+
 CREATE TRIGGER trg_validation_updated_at BEFORE UPDATE ON validation
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
