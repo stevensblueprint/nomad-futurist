@@ -16,3 +16,5 @@ CREATE TABLE project_progress_state (
     CONSTRAINT ck_progress_dates CHECK
         (started_at IS NULL OR completed_at IS NULL OR completed_at >= started_at)
 );
+
+CREATE INDEX idx_progress_completed_by ON project_progress_state (completed_by);

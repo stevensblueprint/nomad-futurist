@@ -199,7 +199,7 @@ Always take a snapshot first (Section 5).
 1. **A migration fails.** Its transaction rolls back and the version is not
    recorded. Fix the file and re-run `up`. (Do not fix it by editing a version
    that already succeeded; add a new version instead.)
-2. **Undo the newest version.** `python migrate.py down --steps 1 --yes`.
+2. **Undo the newest version.** `uv run python migrations/migrate.py down --steps 1 --yes` (from `backend/`).
    This drops tables and data, so snapshot first.
 3. **Data loss or a bad state.** Restore from the pre-migration snapshot into a
    NEW instance with `aws rds restore-db-instance-from-db-snapshot`, check it,

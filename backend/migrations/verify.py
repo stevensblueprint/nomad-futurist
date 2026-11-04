@@ -33,10 +33,10 @@ EXPECTED_INDEXES = {
     "founder_profiles_pkey", "uq_founder_profiles_user_id",
     "projects_pkey", "idx_projects_created_by_user_id", "idx_projects_status",
     "project_founders_pkey", "idx_project_founders_founder_id", "uq_project_founders_one_primary",
-    "project_progress_state_pkey", "uq_progress_project_stage",
-    "project_documents_pkey", "idx_project_documents_project_id",
-    "validation_pkey", "uq_validation_project_id", "idx_validation_reviewer_id",
-    "tasks_pkey", "idx_tasks_project_id", "idx_tasks_owner_id", "idx_tasks_assigned_by_id",
+    "project_progress_state_pkey", "uq_progress_project_stage", "idx_progress_completed_by",
+    "project_documents_pkey", "idx_project_documents_project_id", "idx_project_documents_uploaded_by",
+    "validation_pkey", "uq_validation_project_id", "idx_validation_reviewer_id", "idx_validation_updated_by",
+    "tasks_pkey", "idx_tasks_project_id", "idx_tasks_owner_id", "idx_tasks_assigned_by_id", "idx_tasks_created_by_id",
     "nda_acceptances_pkey", "uq_nda_user_version",
 }
 
