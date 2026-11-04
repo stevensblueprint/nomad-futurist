@@ -8,7 +8,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    setupFiles: ["./vitest.setup.ts"],
-    include: ["app/**/*.test.{ts,tsx}"],
+    setupFiles: ["./test/setup.ts"],
+    // The .mjs tests run under `node --test`, so keep them out of vitest.
+    include: ["app/**/*.test.{ts,tsx}", "__tests__/**/*.test.{ts,tsx}"],
   },
 });

@@ -8,7 +8,7 @@ const { getCurrentUser, fetchAuthSession } = vi.hoisted(() => ({
   fetchAuthSession: vi.fn(),
 }));
 
-vi.mock("../../lib/amplify", () => ({}));
+vi.mock("../../auth/amplify-config", () => ({}));
 vi.mock("aws-amplify/auth", () => ({
   getCurrentUser,
   fetchAuthSession,

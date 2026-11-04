@@ -1,756 +1,382 @@
-# AWS CDK Infrastructure Development
+# Nomad Futurist Incubator
 
-The Nomad Incubator infrastructure is managed using **AWS CDK v2 with Python**.
+The Nomad Futurist Incubator is a web application for Founder registration, project intake, and future project validation and administrative workflows. This README is primarily a **local development setup guide**: follow the steps below to install the dependencies, configure the application, and run the frontend on your machine.
 
-The CDK application is located under:
+The frontend uses **Next.js, React, TypeScript, and AWS Amplify**. Authentication and API requests connect to **AWS services hosted remotely**. The infrastructure is defined with **AWS CDK v2 (Python)**, but **you do not need to deploy a CDK stack or install the AWS CLI to run the frontend locally**.
 
-```text
-infrastructure/
-├── app.py
-├── cdk.json
-├── requirements.txt
-├── package.json
-│
-├── stacks/
-│   ├── __init__.py
-│   ├── api_stack.py
-│   ├── auth_stack.py
-│   └── db_stack.py
-│
-└── nomad_constructs/
-    └── __init__.py
-```
+## Quick start
 
-The current infrastructure stacks are organized as follows:
-
-- `auth_stack.py` — Amazon Cognito infrastructure
-- `db_stack.py` — PostgreSQL Amazon RDS infrastructure
-- `api_stack.py` — Amazon API Gateway and AWS Lambda infrastructure
-- `nomad_constructs/` — reusable project-specific CDK constructs
-- `app.py` — CDK application entry point
-
----
-
-## Prerequisites
-
-Before working with the infrastructure, install the following locally.
-
-### 1. WSL / Linux Environment
-
-Infrastructure development should be performed from the project's WSL/Linux environment.
-
-Verify:
+If you already have **Git**, **Node.js 22 LTS**, **npm**, and the correct AWS frontend configuration values:
 
 ```bash
-uname -a
+# Clone the repository
+git clone https://github.com/stevensblueprint/nomad-futurist.git
+cd nomad-futurist
+
+# Install dependencies for both npm workspaces
+npm ci
+
+# Create your local frontend configuration
+cp frontend/.env.example frontend/.env.local
+
+# Edit frontend/.env.local and replace the example/blank values
+# with the Cognito and API Gateway values provided by the team.
+
+# Run the Next.js development server
+npm run dev
 ```
 
----
+Open **http://localhost:3000** in your browser. Keep the terminal running while developing; use **Ctrl+C** to stop the server.
 
-### 2. Node.js
+> **Important:** A successful local start does not automatically mean Cognito sign-up, email confirmation, and project API requests will work. These flows need valid configuration values and accessible AWS resources in the shared development environment. See [Configure environment variables](#4-configure-environment-variables).
 
-AWS CDK's CLI runs on Node.js even though the infrastructure application itself is written in Python.
+## 1. Install prerequisites
 
-The project standard is:
+### Required for frontend development
 
-```text
-Node.js 22 LTS
-```
+| Dependency | Why it is needed | Suggested version |
+| --- | --- | --- |
+| Git | Clone the repository and manage branches | Current stable release |
+| Node.js | Run Next.js and the frontend tooling | **22 LTS** |
+| npm | Install and run workspace packages; included with Node.js | Version bundled with Node.js |
+| Code editor | Edit source code and environment configuration | VS Code or equivalent |
 
-Verify:
+Confirm the installations:
 
 ```bash
+git --version
 node --version
 npm --version
 ```
 
-If using `nvm`:
+**Windows:** We recommend Ubuntu through **Windows Subsystem for Linux (WSL)** for a consistent development environment. Open PowerShell **as Administrator** to install WSL if it is not already available:
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+Complete any Windows restart and Ubuntu first-run setup that Windows requests. Open the **Ubuntu/WSL terminal** and continue with the Bash commands in this README. Install Git and prerequisite utilities inside Ubuntu if needed:
+
+```bash
+sudo apt update
+sudo apt install -y git curl ca-certificates
+```
+
+For Node.js on WSL/Linux or macOS, use your approved Node version manager (for example, [nvm](https://github.com/nvm-sh/nvm)) to install and select Node 22:
 
 ```bash
 nvm install 22
 nvm use 22
+node --version
+npm --version
 ```
 
----
+The `nvm` commands require **nvm to be installed first**. Alternatively, install Node.js 22 from the [official Node.js downloads](https://nodejs.org/en/download). If you develop on **native Windows**, use the Windows Node installer and run the equivalent commands in PowerShell; replace `cp` with `Copy-Item` where needed.
 
-### 3. Python
+### Optional tools for infrastructure developers
 
-The CDK application uses Python.
+You only need the following to work on AWS CDK infrastructure or run AWS-facing CDK commands:
 
-Recommended version:
+- **Python 3.12**, including `venv` and `pip`.
+- **AWS CLI v2**, configured with your own authorized AWS identity/profile.
+- Authorized AWS account permissions for the operations you need.
 
-```text
-Python 3.12
-```
+See [AWS CDK infrastructure (optional)](#aws-cdk-infrastructure-optional). **Do not install or deploy infrastructure just to test frontend changes.**
 
-Verify:
+## 2. Clone the repository
+
+In your Linux/WSL/macOS terminal:
 
 ```bash
-python3 --version
+git clone https://github.com/stevensblueprint/nomad-futurist.git
+cd nomad-futurist
 ```
 
-If Python virtual environments are unavailable on Ubuntu/WSL:
+If you already cloned the repository, update your local `main` first (make sure you have committed or saved any local modifications):
 
 ```bash
-sudo apt update
-sudo apt install -y python3-venv
+git fetch origin
+git switch main
+git pull --ff-only origin main
 ```
 
----
+On Windows with WSL, keep the working copy in the Linux filesystem (for example, under `~/projects/`) rather than a Windows-mounted path when possible. This typically improves Node/Next.js file-watching performance.
 
-### 4. AWS CLI v2
+## 3. Install project dependencies
 
-Each developer who needs to run AWS-facing CDK commands must install the AWS CLI in their own WSL environment.
-
-Install the required system dependency:
-
-```bash
-sudo apt update
-sudo apt install -y unzip
-```
-
-Install AWS CLI v2:
-
-```bash
-curl -fsSL https://awscli.amazonaws.com/v2/install.sh | bash
-```
-
-If `aws` is not found afterward, add the user-local binary directory to the shell path:
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-Verify:
-
-```bash
-aws --version
-```
-
----
-
-# Initial Repository Setup
-
-The repository uses **npm workspaces**.
-
-Node dependencies are therefore installed from the **repository root**, not independently inside each workspace.
-
-From the repository root:
+The repository uses **npm workspaces** for `frontend/` and `infrastructure/`. Run the install command **once from the repository root**:
 
 ```bash
 npm ci
 ```
 
-This installs the workspace dependencies defined by the root `package.json` and `package-lock.json`, including the AWS CDK CLI used by `/infrastructure`.
+This installs the versions recorded in the root `package-lock.json`, including:
 
----
+- Next.js, React, React DOM, and TypeScript.
+- AWS Amplify and Amplify React UI dependencies.
+- ESLint and frontend build tooling.
+- The AWS CDK CLI package used by the infrastructure workspace.
 
-# Python CDK Environment Setup
+**`npm ci` installs JavaScript packages; it does not install the Python CDK dependencies.** You do not need those Python packages to run the frontend.
 
-Navigate to the infrastructure directory:
+Do not separately run `npm install` in individual workspaces as part of the normal setup, and do not commit `node_modules/`. If dependencies change in a PR, rerun `npm ci` from the root after updating your branch.
+
+## 4. Configure environment variables
+
+The frontend connects to the **existing shared AWS development environment**. Create a local environment file from the checked-in template:
 
 ```bash
-cd infrastructure
+cp frontend/.env.example frontend/.env.local
 ```
 
-## 1. Create a Python Virtual Environment
+On native Windows PowerShell, use:
+
+```powershell
+Copy-Item frontend/.env.example frontend/.env.local
+```
+
+Edit `frontend/.env.local` with the **actual values provided by your project lead or authorized AWS team**:
+
+```dotenv
+NEXT_PUBLIC_COGNITO_USER_POOL_ID=<your-user-pool-id>
+NEXT_PUBLIC_COGNITO_APP_CLIENT_ID=<your-spa-app-client-id>
+NEXT_PUBLIC_PROJECT_API_URL=https://<api-id>.execute-api.us-east-1.amazonaws.com/dev
+```
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Identifies the existing Cognito User Pool |
+| `NEXT_PUBLIC_COGNITO_APP_CLIENT_ID` | Identifies the public SPA app client; **not** a client secret |
+| `NEXT_PUBLIC_PROJECT_API_URL` | Base URL for the deployed API Gateway `dev` stage; the frontend appends paths such as `/projects` |
+
+The source of these values is the **`NomadStack` CloudFormation outputs** (`CognitoUserPoolId`, `CognitoUserPoolAppClientId`, and `ProjectApiUrl`, nested under their constructs' output names). If you have authorized AWS CLI access, you can inspect the outputs with:
 
 ```bash
+aws cloudformation describe-stacks \
+  --stack-name NomadStack \
+  --region us-east-1 \
+  --query 'Stacks[0].Outputs'
+```
+
+Otherwise, request the values from the project lead. **Do not run `cdk deploy` to generate configuration values.**
+
+> **Security:** `NEXT_PUBLIC_` variables are embedded in browser-accessible code. Never put AWS access keys, passwords, API secrets, or a Cognito client secret in them. Keep `.env.local` out of Git. Restart `npm run dev` after changing environment variables.
+
+### What runs locally vs. in AWS?
+
+| Runs on your machine | Uses the shared AWS environment |
+| --- | --- |
+| Next.js development server on `localhost:3000` | Cognito User Pool for sign-up, sign-in, and confirmation |
+| React pages, styling, and client-side validation | SES-backed email delivery configured for Cognito |
+| Frontend tests, linting, and builds | API Gateway and Lambda for project registration and other API routes |
+| Local `.env.local` configuration | Existing RDS and networking resources (not yet integrated into project persistence) |
+
+You can work on styling and UI components without deploying AWS resources. Authentication and API integration tests, however, require working connections to the corresponding remote services.
+
+## 5. Run the application locally
+
+From the **repository root**:
+
+```bash
+npm run dev
+```
+
+Open **http://localhost:3000** in a browser. The root script delegates to the `@nomad/frontend` workspace and starts the Next.js development server.
+
+Typical workflow:
+
+1. Start `npm run dev` and leave that terminal open.
+2. Open `http://localhost:3000`.
+3. Make changes under `frontend/` and reload the browser as needed. Next.js generally refreshes changes automatically.
+4. Use **Ctrl+C** to stop the local server.
+
+You can also start the frontend explicitly:
+
+```bash
+npm run dev --workspace=@nomad/frontend
+```
+
+**Do not use `npx cdk deploy` to run the website locally.** That command deploys infrastructure into AWS, not onto your computer.
+
+### Available frontend pages
+
+| Route | Current role |
+| --- | --- |
+| `/` | Home page; authentication-aware UI |
+| `/sign-up` | Founder account creation and email confirmation |
+| `/sign-in` | Existing-account sign-in |
+| `/registration` | Founder project registration form |
+
+Other frontend directories are present, but their presence alone does not mean their end-to-end functionality is complete. User access and account group membership are determined by the shared Cognito configuration.
+
+### Authentication and registration behavior
+
+- Founder sign-up calls Cognito and requires email confirmation. On confirmation, the Post-Confirmation Lambda assigns the **Founders** group.
+- The frontend supports automatic sign-in when Cognito completes that flow, with a sign-in fallback.
+- The Project Registration form sends an authenticated `POST /projects` request to API Gateway.
+- **Project submissions currently return a validated temporary response and are not persisted to PostgreSQL.** A successful API response does not create a saved project record.
+- Email verification delivery depends on SES configuration and the account's current sending permissions. If the email never arrives, confirm the relevant AWS configuration with the infrastructure team.
+
+**Stopping `npm run dev` or closing the terminal does not, by itself, guarantee that the browser's Cognito session is signed out.** Use the application's sign-out action when appropriate; session lifecycle requirements are handled separately from local server startup.
+
+## 6. Validate your changes
+
+Run these from the repository root before requesting review:
+
+```bash
+# Check frontend lint errors
+npm run lint
+
+# Build the Next.js application
+npm run build
+
+# Run existing registration helper tests
+npm run test:registration --workspace=@nomad/frontend
+
+# Run existing authentication helper tests
+npm run test:auth --workspace=@nomad/frontend
+```
+
+For a separate TypeScript check, use:
+
+```bash
+npx tsc --noEmit -p frontend/tsconfig.json
+```
+
+The root `build` and `lint` scripts operate on the frontend. The two test scripts above are defined in `frontend/package.json`; there is no single repository-wide `npm test` script configured for all workspaces.
+
+## 7. Troubleshooting local setup
+
+| Problem | What to check |
+| --- | --- |
+| `node`, `npm`, or `nvm` is not found | Install Node 22; confirm your shell/path and whether `nvm` was initialized |
+| `npm ci` fails | Run from repository root, use the committed lockfile, verify Node/npm version, and inspect the first error |
+| `localhost:3000` is unavailable | Confirm the dev server is running; stop any other process occupying port 3000 |
+| Next.js starts on port 3001 | Prefer freeing port 3000. API Gateway's current CORS origin is `http://localhost:3000`; requests from another origin may fail |
+| Cognito configuration error | Check `.env.local` spelling and real User Pool/App Client IDs; restart the dev server |
+| Login or registration requests fail | Confirm that AWS services are reachable, the user's Cognito account is confirmed, and the correct app client is configured |
+| Confirmation code email does not arrive | Check Cognito user confirmation status and SES identity/sandbox/sending restrictions with the AWS team |
+| Browser reports a CORS error | Confirm the port/origin and the API URL; CORS must be corrected in the deployed API configuration, not bypassed in the browser |
+| `POST /projects` returns `401` or `403` | Check signed-in session and **Founders** group membership |
+| `POST /projects` succeeds but project disappears | Expected for current scope: the handler does not save projects to PostgreSQL |
+| Environment changes do not appear | Stop and restart `npm run dev` after editing `.env.local` |
+
+Avoid changing the shared AWS infrastructure to work around a local setup issue without discussing it with the infrastructure lead.
+
+## Repository layout
+
+```text
+nomad-futurist/
+├── README.md
+├── package.json                 # npm workspaces and root frontend scripts
+├── package-lock.json            # locked npm dependency versions
+├── frontend/
+│   ├── .env.example             # example browser-side configuration
+│   ├── app/                     # Next.js App Router pages and styles
+│   │   ├── auth/                # Amplify configuration and shared auth components
+│   │   ├── sign-up/
+│   │   ├── sign-in/
+│   │   └── registration/
+│   └── package.json             # frontend scripts and dependencies
+├── backend/                     # backend source scaffolding
+└── infrastructure/
+    ├── app.py                   # instantiates NomadStack
+    ├── cdk.json                 # runs the Python CDK app
+    ├── requirements.txt         # Python infrastructure dependencies
+    ├── stacks/
+    │   └── nomad_stack.py       # one CloudFormation stack
+    ├── nomad_constructs/        # project-specific AWS constructs
+    ├── functions/               # Lambda handler code
+    └── tests/                   # Python unit tests
+```
+
+## AWS CDK infrastructure (optional)
+
+This section is for developers working on the shared AWS infrastructure. **Frontend contributors may skip it.**
+
+### Current architecture at a glance
+
+The CDK app uses **one stack, `NomadStack`**, deployed to **`us-east-1`**. Its constructs are:
+
+| Construct | Declared scope |
+| --- | --- |
+| `AuthConstruct` | Cognito User Pool and SPA app client, `Founders`/`TechnicalStaff`/`Mentors`/`Admin` groups, Post-Confirmation and admin-provisioning Lambdas, existing SES domain-identity reference |
+| `ApiConstruct` | REST API Gateway (`nomad-project-api`, stage `dev`), registration/validation Lambda integrations, admin user provisioning route, API logging and CORS |
+| `DatabaseConstruct` | Existing PostgreSQL RDS and VPC resources represented through `CfnInclude` and `rds_template.yaml` |
+| `NotificationConstruct` | Placeholder: SQS/notification processing are not yet implemented |
+| `StorageConstruct` | Placeholder: S3 document storage is not yet implemented |
+
+**Current implementation limits:** Project registration returns a mock/temporary response rather than writing to RDS. Several project and validation endpoints are scaffolding. The presence of S3/SQS placeholders does not mean those AWS resources are deployed by this app.
+
+### Install the optional Python CDK dependencies
+
+Use Python 3.12 and a separate local virtual environment:
+
+```bash
+# Ubuntu/WSL: install the venv package if it is missing
+sudo apt update
+sudo apt install -y python3-venv python3-pip
+
+# From the repository root
+cd infrastructure
 python3 -m venv .venv
-```
-
-Activate it:
-
-```bash
 source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+python -c "import aws_cdk, constructs, boto3; print('Python CDK OK')"
+npx cdk ls
+npx cdk synth NomadStack
 ```
 
-The terminal should now show something similar to:
+If your default `python3` is not Python 3.12, use your installed Python 3.12 interpreter when creating the environment (for example, `python3.12 -m venv .venv`). Avoid naming a local directory `infrastructure/constructs/` because it shadows the third-party Python package.
 
-```text
-(.venv) user@machine:~/nomad-incubator/infrastructure$
-```
+Expected stack name: **`NomadStack`**, not the older `NomadAuthStack`, `NomadDatabaseStack`, or `NomadApiStack`.
 
-The virtual environment must be activated whenever working with the Python CDK application.
+### AWS access and safe infrastructure changes
 
----
-
-## 2. Install Python Dependencies
-
-Install the project dependencies:
-
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-The current `requirements.txt` should contain:
-
-```text
-aws-cdk-lib>=2.0.0,<3.0.0
-constructs>=10.0.0,<11.0.0
-```
-
-Verify that the Python CDK libraries can be imported:
-
-```bash
-python -c "import aws_cdk; import constructs; print('Python CDK OK')"
-```
-
-Expected output:
-
-```text
-Python CDK OK
-```
-
----
-
-## Important: Do Not Create a Local `constructs/` Package
-
-AWS CDK depends on the Python package:
-
-```text
-constructs
-```
-
-Do not create a project directory named:
-
-```text
-infrastructure/constructs/
-```
-
-Doing so will shadow the installed Python package and can cause errors such as:
-
-```text
-ModuleNotFoundError: No module named 'constructs._jsii'
-```
-
-Project-specific constructs belong under:
-
-```text
-infrastructure/nomad_constructs/
-```
-
----
-
-# AWS Authentication
-
-AWS authentication is configured **per developer and per local environment**.
-
-AWS credentials, authentication sessions, and credential files must never be committed to Git or shared between developers.
-
-## 1. Sign In
-
-Authenticate using your authorized AWS identity:
-
-```bash
-aws login
-```
-
-Each infrastructure developer must perform this step from their own WSL environment.
-
----
-
-## 2. Verify AWS Identity
-
-Run:
+AWS-facing commands require your own authorized AWS CLI authentication and access to the correct account in `us-east-1`. Never share or commit credentials. Confirm identity before any changes:
 
 ```bash
 aws sts get-caller-identity
 ```
 
-Confirm that the returned AWS account and identity correspond to the expected project AWS environment.
-
-Example:
-
-```json
-{
-  "UserId": "...",
-  "Account": "...",
-  "Arn": "..."
-}
-```
-
-Do not continue with AWS-changing operations if the account is incorrect.
-
----
-
-## 3. Configure the AWS Region
-
-The Nomad Incubator infrastructure is deployed in:
-
-```text
-us-east-1
-```
-
-Check the current region:
+Only when authorized to work on infrastructure:
 
 ```bash
-aws configure get region
-```
-
-If no region is configured or the region is incorrect:
-
-```bash
-aws configure set region us-east-1
-```
-
-Verify again:
-
-```bash
-aws configure get region
-```
-
-Expected output:
-
-```text
-us-east-1
-```
-
----
-
-# Verify the CDK Environment
-
-With `.venv` activated and Node dependencies installed, verify the CDK CLI:
-
-```bash
-npx cdk --version
-```
-
-Then verify that the CDK application can load the defined stacks:
-
-```bash
-npx cdk list
-```
-
-Expected stacks may include:
-
-```text
-NomadAuthStack
-NomadDatabaseStack
-NomadApiStack
-```
-
----
-
-# Synthesizing Infrastructure
-
-Before committing infrastructure changes, always verify that CDK can synthesize the application.
-
-Run:
-
-```bash
-npx cdk synth
-```
-
-This executes:
-
-```text
-CDK CLI
-   ↓
-cdk.json
-   ↓
-python app.py
-   ↓
-Python CDK stacks
-   ↓
-CloudFormation templates
-```
-
-Generated CloudFormation artifacts are written to:
-
-```text
-infrastructure/cdk.out/
-```
-
-`cdk.out/` is generated locally and must not be committed to Git.
-
----
-
-# Reviewing Infrastructure Changes
-
-Before deploying infrastructure changes, run:
-
-```bash
-npx cdk diff
-```
-
-This compares the proposed CDK infrastructure against the infrastructure currently deployed in AWS.
-
-Developers must review the output carefully, particularly for:
-
-- Resource creation
-- Resource deletion
-- Resource replacement
-- IAM permission changes
-- Networking changes
-- Stateful resources such as RDS
-- Existing Cognito resources
-
-A successful `cdk synth` does **not** mean that a deployment is safe.
-
-`cdk diff` must be reviewed before deployment or resource import.
-
----
-
-# Deploying Infrastructure
-
-Only developers authorized to modify the shared AWS environment should deploy infrastructure.
-
-Deploy all eligible stacks:
-
-```bash
-npx cdk deploy
-```
-
-Or deploy an individual stack:
-
-```bash
-npx cdk deploy NomadApiStack
-```
-
-Do not deploy changes to shared infrastructure without first reviewing:
-
-```bash
-npx cdk diff
-```
-
----
-
-# Importing Existing AWS Resources
-
-Some Nomad infrastructure was originally created manually through the AWS Console.
-
-Examples include:
-
-- Amazon Cognito
-- PostgreSQL Amazon RDS
-
-These resources must not be recreated accidentally.
-
-Developers assigned to infrastructure migration should follow:
-
-```text
-Existing AWS Resource
-        ↓
-CloudFormation IaC Generator
-        ↓
-Review Generated Configuration
-        ↓
-Represent Resource in CDK
-        ↓
-cdk synth
-        ↓
-cdk diff
-        ↓
-cdk import
-```
-
-Use:
-
-```bash
-npx cdk import
-```
-
-only after confirming that the CDK configuration accurately represents the existing AWS resource.
-
-Do not use a normal deployment to create a duplicate resource when an existing resource is intended to be imported.
-
----
-
-# CDK Bootstrapping
-
-AWS CDK requires each AWS account/Region environment to be bootstrapped before deployment.
-
-Bootstrapping is normally performed **once per AWS account and Region**, not once per developer.
-
-The project environment is:
-
-```text
-AWS Account
-+
-us-east-1
-```
-
-If the environment already contains the CloudFormation stack:
-
-```text
-CDKToolkit
-```
-
-developers should not bootstrap it again.
-
-If bootstrapping is required, an authorized infrastructure developer can run:
-
-```bash
-npx cdk bootstrap aws://ACCOUNT_ID/us-east-1
-```
-
----
-
-# Daily Infrastructure Development Workflow
-
-After the initial environment setup, a developer's normal workflow is:
-
-```bash
-# Repository root
-git checkout develop
-git pull origin develop
-
-# Create feature branch
-git checkout -b feat/<feature-name>
-
-# Install/update workspace dependencies
-npm ci
-
-# Enter infrastructure
 cd infrastructure
-
-# Activate Python environment
 source .venv/bin/activate
 
-# Ensure Python dependencies are installed
-pip install -r requirements.txt
+# Local Python tests and synthesis
+python -m unittest discover -s tests -v
+npx cdk synth NomadStack
 
-# Verify AWS identity
-aws sts get-caller-identity
-
-# Verify CDK
-npx cdk list
-
-# Develop infrastructure...
-
-# Validate CDK
-npx cdk synth
-
-# Review AWS changes
-npx cdk diff
+# Compare with resources currently deployed in AWS
+npx cdk diff NomadStack
 ```
 
-After validation:
+**Do not run `npx cdk deploy NomadStack`, `cdk import`, or `cdk bootstrap` to set up your local frontend.** These commands affect AWS infrastructure. Changes to the imported RDS/VPC resources, Cognito User Pool, SES identity configuration, IAM policies, or resource logical IDs require explicit review and approval. Verify that a live `cdk diff` contains only the intended changes before any authorized deployment.
+
+## Git and contribution workflow
+
+Work from a current local `main` and open focused PRs back into `main`:
+
+```bash
+git fetch origin
+git switch main
+git pull --ff-only origin main
+git switch -c feat/short-description
+```
+
+After making and validating changes:
 
 ```bash
 git status
-git add <relevant-files>
-git commit -m "feat(infrastructure): <description>"
-git push -u origin <branch-name>
+git add <changed-files>
+git commit -m "feat(frontend): describe the change"
+git push -u origin feat/short-description
 ```
 
-Open a pull request into:
+Follow repository reviewer and branch-protection requirements. Keep frontend design changes separate from CDK infrastructure modifications wherever possible.
 
-```text
-develop
-```
-
----
-
-# Infrastructure Development Responsibilities
-
-Current stack ownership is organized as:
-
-```text
-auth_stack.py
-    ↓
-Cognito Infrastructure
-
-db_stack.py
-    ↓
-PostgreSQL RDS Infrastructure
-
-api_stack.py
-    ↓
-API Gateway
-Lambda Functions
-API → Lambda Integrations
-Lambda Execution Roles
-```
-
-Feature-specific infrastructure should be implemented within the appropriate stack or reusable construct.
-
-Avoid creating unrelated resources inside another feature's stack.
-
----
-
-# Git Requirements
-
-The following files and directories must **not** be committed:
-
-```text
-.venv/
-cdk.out/
-node_modules/
-__pycache__/
-.env
-.env.local
-```
-
-The repository should commit:
-
-```text
-app.py
-cdk.json
-requirements.txt
-package.json
-package-lock.json
-stacks/
-nomad_constructs/
-```
-
-Verify ignored files before committing:
-
-```bash
-git status
-```
-
-A recommended `.gitignore` configuration includes:
-
-```gitignore
-# Node
-node_modules/
-
-# Next.js
-.next/
-frontend/.next/
-out/
-
-# Python
-.venv/
-venv/
-__pycache__/
-*.py[cod]
-.pytest_cache/
-
-# AWS CDK
-cdk.out/
-
-# Environment files
-.env
-.env.local
-.env.*.local
-```
-
----
-
-# Commit Convention
-
-Infrastructure changes use Conventional Commit formatting.
-
-Examples:
-
-```bash
-git commit -m "chore(infrastructure): configure Python CDK environment"
-```
-
-```bash
-git commit -m "feat(infrastructure): define Cognito resources"
-```
-
-```bash
-git commit -m "feat(infrastructure): define PostgreSQL RDS resources"
-```
-
-```bash
-git commit -m "feat(infrastructure): add project API Gateway and Lambda resources"
-```
-
-```bash
-git commit -m "fix(infrastructure): correct Lambda execution role permissions"
-```
-
-Recommended types:
-
-```text
-feat      New infrastructure capability
-fix       Infrastructure bug fix
-chore     Tooling/dependency/configuration changes
-refactor  Structural changes without behavior changes
-docs      Documentation
-test      Infrastructure tests
-```
-
----
-
-# Required Checks Before Opening an Infrastructure PR
-
-At minimum, infrastructure developers should verify:
-
-```bash
-source .venv/bin/activate
-
-python -c "import aws_cdk; import constructs; print('Python CDK OK')"
-
-aws sts get-caller-identity
-
-npx cdk list
-
-npx cdk synth
-
-npx cdk diff
-```
-
-A pull request should not be considered ready for review if:
-
-```text
-cdk synth
-```
-
-fails.
-
-For AWS-changing infrastructure, the developer should also review and summarize the relevant:
-
-```text
-cdk diff
-```
-
-output in the pull request.
-
----
-
-# New Developer Quick Start
-
-For a developer cloning the repository for the first time:
-
-```bash
-# Clone repository
-git clone <repository-url>
-
-cd nomad-incubator
-
-# Install Node workspace dependencies
-npm ci
-
-# Enter infrastructure
-cd infrastructure
-
-# Create Python virtual environment
-python3 -m venv .venv
-
-# Activate it
-source .venv/bin/activate
-
-# Install Python CDK dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# Authenticate to AWS
-aws login
-
-# Verify AWS account
-aws sts get-caller-identity
-
-# Configure region if necessary
-aws configure set region us-east-1
-
-# Verify Python CDK
-python -c "import aws_cdk; import constructs; print('Python CDK OK')"
-
-# Verify CDK application
-npx cdk --version
-npx cdk list
-
-# Synthesize CloudFormation
-npx cdk synth
-```
-
-If all commands complete successfully, the local Python CDK development environment is ready.
+Files such as `node_modules/`, `.next/`, `.venv/`, `cdk.out/`, and `.env.local` are local or generated and must not be committed. Review `git status` before pushing.

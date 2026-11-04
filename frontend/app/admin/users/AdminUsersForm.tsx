@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { fetchAuthSession, getCurrentUser } from "aws-amplify/auth";
-import "../../lib/amplify";
+import "../../auth/amplify-config";
 import styles from "./AdminUsersForm.module.css";
 import {
   isAdmin,

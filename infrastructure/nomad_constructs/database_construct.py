@@ -1,16 +1,21 @@
-import os
+from pathlib import Path
 
-import aws_cdk as cdk
-
+from aws_cdk import cloudformation_include as cfn_include
 from constructs import Construct
 
-class DatabaseConstruct (Construct):
+
+class DatabaseConstruct(Construct):
+    """Preserve the database and network resources already imported into NomadStack."""
+
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
 
-        template = os.path.join(os.path.dirname(__file__), "rds_template.yaml")
-
-        self.template = cdk.cloudformation_include.CfnInclude(
-            self, "Template", template_file=template
+        # These logical IDs and definitions match the deployed stack. Renaming
+        # them would detach retained resources or create replacement resources.
+        self.template = cfn_include.CfnInclude(
+            self,
+            "Template",
+            template_file=str(Path(__file__).with_name("rds_template.yaml")),
+            preserve_logical_ids=True,
         )
         self.db = self.template.get_resource("RDSDBInstance")

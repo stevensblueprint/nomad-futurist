@@ -1,4 +1,6 @@
 import { Amplify } from "aws-amplify";
+import { cognitoUserPoolsTokenProvider } from "aws-amplify/auth/cognito";
+import { sessionStorage } from "aws-amplify/utils";
 
 Amplify.configure({
   Auth: {
@@ -7,7 +9,9 @@ Amplify.configure({
       userPoolClientId: process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID!,
       loginWith: { email: true },
       signUpVerificationMethod: "code",
-      userAttributes: { email: { required: true } },
+      userAttributes: {
+        email: { required: true },
+      },
       passwordFormat: {
         minLength: 8,
         requireLowercase: true,
@@ -18,3 +22,5 @@ Amplify.configure({
     },
   },
 });
+
+cognitoUserPoolsTokenProvider.setKeyValueStorage(sessionStorage);
