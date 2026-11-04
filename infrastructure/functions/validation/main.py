@@ -21,7 +21,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     claims = _claims(event)
     if claims is None:
         return _response(401, {"message": "Authentication is required."})
-    if not {"TechnicalStaff", "Mentors"}.intersection(
+    if not {"Admin", "TechnicalStaff", "Mentors"}.intersection(
         _groups(claims.get("cognito:groups"))
     ):
         return _response(403, {"message": "Project Validation access is required."})
