@@ -50,7 +50,7 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
 
     steps = 1
     if action == "down":
-        steps = event.get("steps", 1)
+        steps = event.get("steps")
         valid_steps = isinstance(steps, int) and not isinstance(steps, bool) and steps >= 1
         if event.get("confirm") != "drop-data" or not valid_steps:
             return _result(2, 'down needs "confirm": "drop-data" and an integer "steps" >= 1')

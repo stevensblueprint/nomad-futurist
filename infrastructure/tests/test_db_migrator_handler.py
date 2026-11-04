@@ -75,6 +75,7 @@ class HandlerTest(unittest.TestCase):
     def test_down_needs_confirmation_and_valid_steps(self) -> None:
         for event in (
             {"action": "down"},
+            {"action": "down", "confirm": "drop-data"},
             {"action": "down", "steps": 1},
             {"action": "down", "steps": 1, "confirm": "yes"},
             {"action": "down", "steps": 0, "confirm": "drop-data"},
