@@ -170,14 +170,15 @@ Create it without putting the password in shell history or the repo:
 umask 077
 TMP=$(mktemp)
 read -rs PW
-printf '{"username":"nomad","password":"%s","host":"db-nomad.cjee06yueexr.us-east-1.rds.amazonaws.com","port":5432,"dbname":"postgres"}\n' "$PW" > "$TMP"
+jq -n --arg pw "$PW" '{username:"nomad",password:$pw,host:"db-nomad.cjee06yueexr.us-east-1.rds.amazonaws.com",port:5432,dbname:"postgres"}' > "$TMP"
 AWS_PROFILE=bp2 aws secretsmanager create-secret --name nomad/db-migration --secret-string "file://$TMP"
-shred -u "$TMP"
+rm -f "$TMP"
 unset PW
 ```
 
-If the password contains `"` or `\`, escape them or build the JSON with a JSON
-tool instead of `printf`. Creating the secret needs the
+`jq` escapes any special character in the password. The file is created with
+mode 600 (`umask 077`) and removed at once. Use a directory on a disk you trust
+for `mktemp`, not a shared one. Creating the secret needs the
 `secretsmanager:CreateSecret` permission; the `nomad` IAM group does not have it
 today.
 
@@ -239,7 +240,7 @@ The secret is not managed by CDK. It stays until you delete it by hand.
 | `check` | `{"action":"check"}` | report versions pending or differing from the repo |
 | `verify` | `{"action":"verify"}` | verify the deployed schema |
 | `integrity` | `{"action":"integrity"}` | run the constraint tests; every test is rolled back |
-| `down` | `{"action":"down","steps":N,"confirm":"drop-data"}` | revert the newest N versions |
+| `down` | `{"action":"down","steps":N,"confirm":"drop-data"}` | revert the newest N versions (`steps` is required) |
 
 The result is JSON: `{"exitCode": n, "ok": bool, "output": text}`.
 
@@ -262,6 +263,14 @@ Exit codes:
 - The secret costs about $0.40 a month.
 - The only inbound change on the RDS security group is port 5432 from the
   migrator security group. The existing `155.246.151.34/32` rule is unchanged.
+- The RDS security group belongs to `NomadStack` (from `rds_template.yaml`), and
+  the migrator rule is a separate resource in `NomadMigrationStack`. A later
+  `cdk deploy NomadStack` that changes this security group can remove the
+  migrator rule. Then the migrator cannot reach the database. If that happens,
+  deploy `NomadMigrationStack` again to restore the rule. Removing the migration
+  stack removes only its own rule.
+- `integrity` runs about 97 tests. Failure messages are plainer, because the Lambda
+  package is read-only and pytest cannot rewrite assertions.
 
 ### CDK CLI version
 
