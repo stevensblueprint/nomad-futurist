@@ -7,6 +7,7 @@ const auth = vi.hoisted(() => ({
   signUp: vi.fn(),
   signIn: vi.fn(),
   confirmSignUp: vi.fn(),
+  confirmSignIn: vi.fn(),
   autoSignIn: vi.fn(),
   fetchAuthSession: vi.fn(),
   push: vi.fn(),
@@ -143,4 +144,129 @@ it("redirects an existing authenticated session without displaying the sign-in f
   render(<AuthForm mode="sign-in" />);
   await waitFor(() => expect(auth.replace).toHaveBeenCalledWith("/"));
   expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
+});
+
+async function signInToChallenge(signInStep: string) {
+  auth.signIn.mockResolvedValue({ isSignedIn: false, nextStep: { signInStep } });
+  const user = userEvent.setup();
+  render(<AuthForm mode="sign-in" />);
+  await user.type(
+    await screen.findByLabelText("Email address"),
+    "admin@example.com",
+  );
+  await user.type(screen.getByLabelText("Password"), "TempPass1!");
+  await user.click(screen.getByRole("button", { name: "Sign in" }));
+  return user;
+}
+
+async function setNewPassword(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(await screen.findByLabelText("New password"), "NewPass1!");
+  await user.type(screen.getByLabelText("Confirm new password"), "NewPass1!");
+  await user.click(screen.getByRole("button", { name: "Set password" }));
+}
+
+it("sets a new password when Cognito requires it, then redirects home", async () => {
+  auth.confirmSignIn.mockResolvedValue({
+    isSignedIn: true,
+    nextStep: { signInStep: "DONE" },
+  });
+  const user = await signInToChallenge(
+    "CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED",
+  );
+
+  expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
+  expect(await screen.findByLabelText("New password")).toHaveValue("");
+  await setNewPassword(user);
+
+  expect(auth.confirmSignIn).toHaveBeenCalledWith({
+    challengeResponse: "NewPass1!",
+  });
+  await waitFor(() => expect(auth.replace).toHaveBeenCalledWith("/"));
+});
+
+it("rejects a weak or mismatched new password before calling Amplify", async () => {
+  const user = await signInToChallenge(
+    "CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED",
+  );
+  await user.type(await screen.findByLabelText("New password"), "short");
+  await user.type(screen.getByLabelText("Confirm new password"), "different");
+  await user.click(screen.getByRole("button", { name: "Set password" }));
+
+  expect(auth.confirmSignIn).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("New password")).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  expect(screen.getByLabelText("Confirm new password")).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+});
+
+it.each(["CONFIRM_SIGN_IN_WITH_EMAIL_CODE", "CONFIRM_SIGN_IN_WITH_OTP"])(
+  "submits the email code for %s and redirects home",
+  async (signInStep) => {
+    auth.confirmSignIn.mockResolvedValue({
+      isSignedIn: true,
+      nextStep: { signInStep: "DONE" },
+    });
+    const user = await signInToChallenge(signInStep);
+
+    await user.type(await screen.findByLabelText("Email code"), "123456");
+    await user.click(screen.getByRole("button", { name: "Confirm code" }));
+
+    expect(auth.confirmSignIn).toHaveBeenCalledWith({
+      challengeResponse: "123456",
+    });
+    await waitFor(() => expect(auth.replace).toHaveBeenCalledWith("/"));
+  },
+);
+
+it("requires an email code before calling Amplify", async () => {
+  const user = await signInToChallenge("CONFIRM_SIGN_IN_WITH_EMAIL_CODE");
+  await user.click(
+    await screen.findByRole("button", { name: "Confirm code" }),
+  );
+  expect(auth.confirmSignIn).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("Email code")).toHaveFocus();
+});
+
+it("chains a new-password challenge into an email-code challenge", async () => {
+  auth.confirmSignIn
+    .mockResolvedValueOnce({
+      isSignedIn: false,
+      nextStep: { signInStep: "CONFIRM_SIGN_IN_WITH_EMAIL_CODE" },
+    })
+    .mockResolvedValue({ isSignedIn: true, nextStep: { signInStep: "DONE" } });
+  const user = await signInToChallenge(
+    "CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED",
+  );
+  await setNewPassword(user);
+
+  await user.type(await screen.findByLabelText("Email code"), "654321");
+  await user.click(screen.getByRole("button", { name: "Confirm code" }));
+
+  expect(auth.confirmSignIn).toHaveBeenNthCalledWith(1, {
+    challengeResponse: "NewPass1!",
+  });
+  expect(auth.confirmSignIn).toHaveBeenNthCalledWith(2, {
+    challengeResponse: "654321",
+  });
+  await waitFor(() => expect(auth.replace).toHaveBeenCalledWith("/"));
+});
+
+it("does not redirect unless confirmSignIn signs the user in", async () => {
+  auth.confirmSignIn.mockResolvedValue({
+    isSignedIn: false,
+    nextStep: { signInStep: "DONE" },
+  });
+  const user = await signInToChallenge(
+    "CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED",
+  );
+  await setNewPassword(user);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "additional sign-in step",
+  );
+  expect(auth.replace).not.toHaveBeenCalled();
 });
