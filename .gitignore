@@ -25,3 +25,9 @@ cdk.out/
 # flake lock
 flake.lock
 *.tsbuildinfo
+
+# Database credentials and certificates
+.pgpass
+*.pgpass
+*.pem
+.pytest_cache/
