@@ -69,6 +69,20 @@ def test_invalid_project_status(conn):
            "VALUES ('p','d','funding','n','weird')")
 
 
+@pytest.mark.parametrize("value", ["draft", "pending", "under_review", "approved", "declined", "archived"])
+def test_valid_project_status(conn, value):
+    conn.execute(
+        "INSERT INTO projects (project_name, description, support_type, needs, status) "
+        "VALUES ('p','d','funding','n',%s)", (value,))
+
+
+@pytest.mark.parametrize("value", ["submitted", "needs_revision", "rejected"])
+def test_removed_project_status_rejected(conn, value):
+    expect(errors.CheckViolation, conn,
+           "INSERT INTO projects (project_name, description, support_type, needs, status) "
+           "VALUES ('p','d','funding','n',%s)", (value,))
+
+
 def test_project_default_status_is_draft(conn):
     pid = insert_project(conn)
     assert conn.execute("SELECT status FROM projects WHERE project_id=%s", (pid,)).fetchone()[0] == "draft"
@@ -259,6 +273,18 @@ def test_validation_invalid_verdict_and_foreign_keys(conn):
            "VALUES (%s,%s,gen_random_uuid(),'approved','f','q','n')", (pid, reviewer))
 
 
+@pytest.mark.parametrize("value", ["approved", "needs_revision", "declined"])
+def test_valid_verdict(conn, value):
+    insert_validation(conn, insert_project(conn), insert_user(conn), verdict=value)
+
+
+def test_removed_verdict_rejected(conn):
+    pid, reviewer = insert_project(conn), insert_user(conn)
+    expect(errors.CheckViolation, conn,
+           "INSERT INTO validation (project_id, reviewer_id, verdict, feedback, probing_questions, next_steps) "
+           "VALUES (%s,%s,'rejected','f','q','n')", (pid, reviewer))
+
+
 def test_delete_validation(conn):
     pid, reviewer = insert_project(conn), insert_user(conn)
     vid = insert_validation(conn, pid, reviewer)
@@ -272,10 +298,10 @@ def test_create_project_task_with_valid_users(conn):
     pid, creator, owner = insert_project(conn), insert_user(conn), insert_user(conn)
     tid = conn.execute(
         "INSERT INTO tasks (project_id, created_by_id, owner_id, assigned_by_id, title, priority, assigned_at) "
-        "VALUES (%s,%s,%s,%s,'Write plan','high', now()) RETURNING task_id", (pid, creator, owner, creator)).fetchone()[0]
+        "VALUES (%s,%s,%s,%s,'Write plan','critical', now()) RETURNING task_id", (pid, creator, owner, creator)).fetchone()[0]
     row = conn.execute("SELECT status, reminder_enabled FROM tasks WHERE task_id=%s", (tid,)).fetchone()
-    assert row == ("todo", False)
-    conn.execute("UPDATE tasks SET status='done', completed_at=now() WHERE task_id=%s", (tid,))
+    assert row == ("request_submitted", False)
+    conn.execute("UPDATE tasks SET status='completed', completed_at=now() WHERE task_id=%s", (tid,))
 
 
 def test_task_owner_may_be_null(conn):
@@ -302,9 +328,38 @@ def test_task_foreign_keys(conn):
 def test_task_invalid_status_and_priority(conn):
     pid, uid = insert_project(conn), insert_user(conn)
     expect(errors.CheckViolation, conn,
-           "INSERT INTO tasks (project_id, created_by_id, title, status) VALUES (%s,%s,'t','blocked')", (pid, uid))
+           "INSERT INTO tasks (project_id, created_by_id, title, status) VALUES (%s,%s,'t','todo')", (pid, uid))
     expect(errors.CheckViolation, conn,
            "INSERT INTO tasks (project_id, created_by_id, title, priority) VALUES (%s,%s,'t','urgent')", (pid, uid))
+
+
+@pytest.mark.parametrize("value", ["request_submitted", "under_review", "unassigned", "assigned",
+                                   "in_progress", "blocked", "completed", "cancelled"])
+def test_valid_task_status(conn, value):
+    pid, uid = insert_project(conn), insert_user(conn)
+    conn.execute(
+        "INSERT INTO tasks (project_id, created_by_id, title, status) VALUES (%s,%s,'t',%s)", (pid, uid, value))
+
+
+@pytest.mark.parametrize("value", ["todo", "done"])
+def test_removed_task_status_rejected(conn, value):
+    pid, uid = insert_project(conn), insert_user(conn)
+    expect(errors.CheckViolation, conn,
+           "INSERT INTO tasks (project_id, created_by_id, title, status) VALUES (%s,%s,'t',%s)", (pid, uid, value))
+
+
+@pytest.mark.parametrize("value", ["critical", "standard"])
+def test_valid_task_priority(conn, value):
+    conn.execute(
+        "INSERT INTO tasks (project_id, created_by_id, title, priority) VALUES (%s,%s,'t',%s)",
+        (insert_project(conn), insert_user(conn), value))
+
+
+@pytest.mark.parametrize("value", ["low", "medium", "high"])
+def test_removed_task_priority_rejected(conn, value):
+    pid, uid = insert_project(conn), insert_user(conn)
+    expect(errors.CheckViolation, conn,
+           "INSERT INTO tasks (project_id, created_by_id, title, priority) VALUES (%s,%s,'t',%s)", (pid, uid, value))
 
 
 def test_task_requires_title(conn):
