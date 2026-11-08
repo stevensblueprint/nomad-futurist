@@ -185,6 +185,27 @@ class HandlerTest(unittest.TestCase):
         self.assertEqual("45 passed", result["output"])
         self.assertEqual([], self.calls)
 
+    def test_report_action_returns_pure_json(self) -> None:
+        def fake_main(argv):
+            self.calls.append(argv)
+            print('{"hash": "abc", "schema": {}}', end="")
+            print("target: noise", file=sys.stderr)
+            return 0
+
+        self.handler.migrate.main = fake_main
+        result = self.invoke({"action": "report", "password": PASSWORD})
+        self.assertEqual([["report"]], self.calls)
+        self.assertEqual(0, result["exitCode"])
+        self.assertTrue(result["ok"])
+        # The "target:" line goes to stderr, which is dropped, so the output is
+        # pure JSON that json.loads accepts.
+        self.assertEqual({"hash": "abc", "schema": {}}, json.loads(result["output"]))
+
+    def test_report_requires_password(self) -> None:
+        result = self.invoke({"action": "report"})
+        self.assertEqual(2, result["exitCode"])
+        self.assertEqual([], self.calls)
+
     def test_env_defaults_for_port_and_dbname(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("DB_PORT", None)

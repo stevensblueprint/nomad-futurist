@@ -129,3 +129,9 @@ class BundleRequirementsTest(unittest.TestCase):
         from nomad_constructs.migration_construct import PIP_REQUIREMENTS
 
         self.assertTrue(any(r.startswith("typing_extensions") for r in PIP_REQUIREMENTS))
+
+    def test_report_py_is_in_source_files(self) -> None:
+        from nomad_constructs.migration_construct import _source_files
+
+        names = {p.name for p in _source_files()}
+        self.assertIn("report.py", names)

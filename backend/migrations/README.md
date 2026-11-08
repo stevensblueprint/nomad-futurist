@@ -242,6 +242,7 @@ npx cdk destroy NomadMigrationStack -c deploy_migrator=true
 | `up` | `{"action":"up","password":"..."}` | apply pending versions |
 | `check` | `{"action":"check","password":"..."}` | report versions pending or differing from the repo |
 | `verify` | `{"action":"verify","password":"..."}` | verify the deployed schema |
+| `report` | `{"action":"report","password":"..."}` | dump the schema as JSON (structure + hash) |
 | `integrity` | `{"action":"integrity","password":"..."}` | run the constraint tests; every test is rolled back |
 | `down` | `{"action":"down","steps":N,"confirm":"drop-data","password":"..."}` | revert the newest N versions (`steps` is required) |
 
@@ -388,3 +389,40 @@ Change `PGDATABASE`. No SQL changes are needed.
 Out of scope for now. The application Lambdas are not in the VPC, so wiring them
 to RDS needs separate work (VPC config, security group access, and a way to
 supply the database credentials).
+
+## 11. Compare a database with the repository (report)
+
+`report` dumps the complete structure of the `public` schema as deterministic
+JSON plus a SHA-256 hash, read-only. It runs inside a `SET TRANSACTION READ
+ONLY` transaction and creates nothing. It covers tables, columns, constraints
+(including the `ON DELETE` rule of foreign keys), indexes, triggers, functions,
+and the applied migration checksums. It excludes owners, ACLs, OIDs,
+tablespaces, timestamps, and the server version, so two databases built from
+the same migration files produce the same `hash` even when their names, owners,
+and OIDs differ.
+
+Run `report` on the target database (via the Lambda action `report`, Section
+5.4) and on a local database built from the same files (Section 6):
+
+```bash
+# local database (reachable, e.g. the Docker test database)
+cd backend
+uv run python migrations/migrate.py report > /tmp/opencode/report_local.json
+
+# target database: invoke the Lambda action "report" and save its JSON output
+# (out.json above) to report_target.json
+```
+
+Then compare:
+
+```bash
+jq -r .hash report_local.json report_target.json
+# the two hashes must be equal
+
+diff <(jq -S .schema report_local.json) <(jq -S .schema report_target.json)
+# no output means the schemas are identical
+```
+
+The `hash` covers structure and applied migration checksums but not row counts
+or the server version. `row_counts` shows whether each table holds data
+(`schema_migrations` should equal the number of applied migrations).

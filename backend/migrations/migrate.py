@@ -6,6 +6,7 @@ Usage:
   python migrate.py down --steps N --yes
   python migrate.py check       exit 1 if pending, 2 if the database and repo differ
   python migrate.py verify      exit 1 if the deployed schema is not as expected
+  python migrate.py report      print the public schema as JSON (structure + hash)
 
 Connection: DATABASE_URL, or the libpq variables (PGHOST, PGUSER, PGPASSWORD,
 PGSSLMODE, ...). PGDATABASE defaults to "postgres". Credentials are never read
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import re
 import sys
@@ -185,7 +187,7 @@ def check(conn: psycopg.Connection, migrations: list[Migration]) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("status", "up", "check", "verify"):
+    for name in ("status", "up", "check", "verify", "report"):
         sub.add_parser(name)
     d = sub.add_parser("down")
     d.add_argument("--steps", type=positive_int, default=1)
@@ -200,7 +202,10 @@ def main(argv: list[str] | None = None) -> int:
         migrations = load_migrations()
         with connect() as conn:
             host = conn.info.host
-            print(f"target: host={host} db={conn.info.dbname} user={conn.info.user}")
+            print(
+                f"target: host={host} db={conn.info.dbname} user={conn.info.user}",
+                file=sys.stderr if args.cmd == "report" else sys.stdout,
+            )
             if args.cmd == "status":
                 done = applied_versions(conn, create=False)
                 for m in migrations:
@@ -229,6 +234,11 @@ def main(argv: list[str] | None = None) -> int:
                     print("PROBLEM:", pr)
                 print("ok: schema verified" if not problems else f"{len(problems)} problem(s)")
                 return 1 if problems else 0
+            if args.cmd == "report":
+                import report
+
+                print(json.dumps(report.build_report(conn), indent=2, sort_keys=True))
+                return 0
     except MigrationError as e:
         print(f"ERROR: {' '.join(str(e).split())}", file=sys.stderr)
         return 3
