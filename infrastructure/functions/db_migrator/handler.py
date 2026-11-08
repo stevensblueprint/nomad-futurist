@@ -125,6 +125,7 @@ def _run_integrity() -> tuple[int, str]:
                 "--tb=short",
                 "-k", "not round_trip",
                 str(TESTS_DIR / "db" / "test_integrity.py"),
+                str(TESTS_DIR / "db" / "test_section5.py"),
             ]
         )
     return int(code), out.getvalue()

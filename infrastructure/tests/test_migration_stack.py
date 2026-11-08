@@ -135,3 +135,10 @@ class BundleRequirementsTest(unittest.TestCase):
 
         names = {p.name for p in _source_files()}
         self.assertIn("report.py", names)
+
+    def test_section5_is_in_integrity_test_files(self) -> None:
+        from nomad_constructs.migration_construct import INTEGRITY_TEST_FILES, _source_files
+
+        self.assertIn("test_section5.py", INTEGRITY_TEST_FILES)
+        names = {p.name for p in _source_files()}
+        self.assertIn("test_section5.py", names)
