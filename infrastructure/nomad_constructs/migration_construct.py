@@ -22,7 +22,9 @@ HANDLER_DIR = REPO_ROOT / "infrastructure" / "functions" / "db_migrator"
 MIGRATIONS_DIR = REPO_ROOT / "backend" / "migrations"
 TESTS_DIR = REPO_ROOT / "backend" / "tests" / "db"
 INTEGRITY_TEST_FILES = ("conftest.py", "test_integrity.py")
-PIP_REQUIREMENTS = ("psycopg[binary]>=3.2,<4", "pytest>=8")
+# typing_extensions is listed on purpose: psycopg needs it on Python 3.12 only, and pip
+# evaluates that condition on the build machine (which may run a newer Python).
+PIP_REQUIREMENTS = ("psycopg[binary]>=3.2,<4", "pytest>=8", "typing_extensions>=4.6")
 _IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc")
 
 

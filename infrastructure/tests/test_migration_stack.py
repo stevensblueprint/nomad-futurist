@@ -120,3 +120,12 @@ class MigrationStackTest(unittest.TestCase):
         egress = template.find_resources("AWS::EC2::SecurityGroupEgress")
         for rule in egress.values():
             self.assertNotIn("CidrIp", rule["Properties"])
+
+
+class BundleRequirementsTest(unittest.TestCase):
+    def test_typing_extensions_is_bundled_for_python_312(self) -> None:
+        # psycopg imports typing_extensions on Python 3.12. Pip decides this on the
+        # build machine, which can run a newer Python, so the package is listed.
+        from nomad_constructs.migration_construct import PIP_REQUIREMENTS
+
+        self.assertTrue(any(r.startswith("typing_extensions") for r in PIP_REQUIREMENTS))
