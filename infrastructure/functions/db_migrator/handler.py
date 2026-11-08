@@ -1,21 +1,21 @@
 """Run the Nomad database migrations from inside the VPC.
 
 Invoke with one of:
-  {"action": "status"}
-  {"action": "up"}
-  {"action": "check"}
-  {"action": "verify"}
-  {"action": "integrity"}     run the constraint tests; every test is rolled back
-  {"action": "down", "steps": N, "confirm": "drop-data"}   revert the newest N versions
+  {"action": "status", "password": "<db password>"}
+  {"action": "up", "password": "<db password>"}
+  {"action": "check", "password": "<db password>"}
+  {"action": "verify", "password": "<db password>"}
+  {"action": "integrity", "password": "<db password>"}     run the constraint tests; every test is rolled back
+  {"action": "down", "steps": N, "confirm": "drop-data", "password": "<db password>"}   revert the newest N versions
 
-The database credentials come from the Secrets Manager secret named in the
-DB_SECRET_NAME environment variable. They are never logged or returned.
+The host, user, database, and port come from the DB_HOST, DB_USER, DB_NAME, and
+DB_PORT environment variables set by CDK. The password is sent in the invoke
+payload. It is never logged or returned.
 """
 from __future__ import annotations
 
 import contextlib
 import io
-import json
 import os
 import sys
 from pathlib import Path
@@ -39,7 +39,6 @@ import migrate  # noqa: E402
 CA_BUNDLE = ROOT / "rds-global-bundle.crt"
 SIMPLE_ACTIONS = ("status", "up", "check", "verify")
 ALL_ACTIONS = SIMPLE_ACTIONS + ("down", "integrity")
-REQUIRED_SECRET_KEYS = ("username", "password", "host")
 
 
 def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
@@ -48,51 +47,44 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
     if action not in ALL_ACTIONS:
         return _result(2, f"unknown action {action!r}; use one of: {', '.join(ALL_ACTIONS)}")
 
-    steps = 1
+    steps = None
     if action == "down":
         steps = event.get("steps")
         valid_steps = isinstance(steps, int) and not isinstance(steps, bool) and steps >= 1
         if event.get("confirm") != "drop-data" or not valid_steps:
             return _result(2, 'down needs "confirm": "drop-data" and an integer "steps" >= 1')
 
-    try:
-        secret = _load_secret()
-    except Exception as exc:  # no details: they could contain secret names or values
-        return _result(3, f"could not read the database secret: {type(exc).__name__}")
+    password = event.get("password")
+    if not isinstance(password, str) or not password:
+        return _result(2, 'a non-empty "password" string is required')
 
-    _configure_environment(secret)
-    if action == "integrity":
-        code, output = _run_integrity(secret)
-    elif action == "down":
-        code, output = _run_migrate(["down", "--steps", str(steps), "--yes"])
-    else:
-        code, output = _run_migrate([action])
-    return _result(code, output.replace(str(secret["password"]), "***"))
-
-
-def _load_secret() -> dict[str, Any]:
-    import boto3
-
-    raw = boto3.client("secretsmanager").get_secret_value(SecretId=os.environ["DB_SECRET_NAME"])
-    secret = json.loads(raw["SecretString"])
-    missing = [key for key in REQUIRED_SECRET_KEYS if not secret.get(key)]
+    missing = [name for name in ("DB_HOST", "DB_USER") if not os.environ.get(name)]
     if missing:
-        raise ValueError(f"secret is missing keys: {', '.join(missing)}")
-    secret.setdefault("port", 5432)
-    secret.setdefault("dbname", "postgres")
-    return secret
+        return _result(3, "missing configuration: " + ", ".join(missing))
+
+    _configure_environment(password)
+    try:
+        if action == "integrity":
+            code, output = _run_integrity()
+        elif action == "down":
+            code, output = _run_migrate(["down", "--steps", str(steps), "--yes"])
+        else:
+            code, output = _run_migrate([action])
+    finally:
+        os.environ.pop("PGPASSWORD", None)
+    return _result(code, output.replace(password, "***"))
 
 
 def _sslmode() -> str:
     return os.environ.get("DB_SSLMODE", "verify-full")
 
 
-def _configure_environment(secret: dict[str, Any]) -> None:
-    os.environ["PGHOST"] = str(secret["host"])
-    os.environ["PGPORT"] = str(secret["port"])
-    os.environ["PGUSER"] = str(secret["username"])
-    os.environ["PGPASSWORD"] = str(secret["password"])
-    os.environ["PGDATABASE"] = str(secret["dbname"])
+def _configure_environment(password: str) -> None:
+    os.environ["PGHOST"] = os.environ["DB_HOST"]
+    os.environ["PGPORT"] = os.environ.get("DB_PORT", "5432")
+    os.environ["PGUSER"] = os.environ["DB_USER"]
+    os.environ["PGPASSWORD"] = password
+    os.environ["PGDATABASE"] = os.environ.get("DB_NAME", "postgres")
     os.environ["PGSSLMODE"] = _sslmode()
     os.environ["PGSSLROOTCERT"] = str(CA_BUNDLE)
 
@@ -107,13 +99,14 @@ def _run_migrate(argv: list[str]) -> tuple[int, str]:
     return int(code or 0), out.getvalue()
 
 
-def _run_integrity(secret: dict[str, Any]) -> tuple[int, str]:
+def _run_integrity() -> tuple[int, str]:
     import pytest
 
     # The password is not in this string: libpq reads it from PGPASSWORD.
     os.environ["INTEGRITY_TARGET_DSN"] = (
-        f"host={secret['host']} port={secret['port']} dbname={secret['dbname']} "
-        f"user={secret['username']} sslmode={_sslmode()} sslrootcert={CA_BUNDLE}"
+        f"host={os.environ['DB_HOST']} port={os.environ.get('DB_PORT', '5432')} "
+        f"dbname={os.environ.get('DB_NAME', 'postgres')} user={os.environ['DB_USER']} "
+        f"sslmode={_sslmode()} sslrootcert={CA_BUNDLE}"
     )
     os.environ["TEST_DATABASE_URL"] = "unused"  # only the fixtures that create databases use it
     out = io.StringIO()

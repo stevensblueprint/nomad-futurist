@@ -8,12 +8,15 @@ VPC_ID = "vpc-0a87c06973c80eb39"
 SUBNET_ID = "subnet-0855eb3b6313a0b17"  # nomad-private-a
 AVAILABILITY_ZONE = "us-east-1a"
 DB_SECURITY_GROUP_ID = "sg-0b0e91786528e3f12"  # nomad-rds-sg
-SECRET_NAME = "nomad/db-migration"  # created by hand; holds username, password, host
+DB_HOST = "db-nomad.cjee06yueexr.us-east-1.rds.amazonaws.com"
+DB_USER = "nomad"
+DB_NAME = "postgres"
 
 
 class NomadMigrationStack(cdk.Stack):
     """One-off tooling that runs database migrations inside the VPC.
 
+    The database password is sent in the invoke payload, not stored in the stack.
     Deploy only on purpose:  npx cdk deploy NomadMigrationStack -c deploy_migrator=true
     Remove with:             npx cdk destroy NomadMigrationStack -c deploy_migrator=true
     """
@@ -28,6 +31,8 @@ class NomadMigrationStack(cdk.Stack):
             availability_zone=AVAILABILITY_ZONE,
             subnet_id=SUBNET_ID,
             db_security_group_id=DB_SECURITY_GROUP_ID,
-            secret_name=SECRET_NAME,
+            db_host=DB_HOST,
+            db_user=DB_USER,
+            db_name=DB_NAME,
         )
         cdk.CfnOutput(self, "MigratorFunctionName", value=migration.function.function_name)
