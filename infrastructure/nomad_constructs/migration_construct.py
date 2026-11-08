@@ -31,7 +31,7 @@ _IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc")
 def _source_files() -> list[Path]:
     """Every file that goes into the package, in a stable order."""
     files = [HANDLER_DIR / "handler.py", HANDLER_DIR / "rds-global-bundle.crt"]
-    files += [MIGRATIONS_DIR / "migrate.py", MIGRATIONS_DIR / "verify.py"]
+    files += [MIGRATIONS_DIR / "migrate.py", MIGRATIONS_DIR / "verify.py", MIGRATIONS_DIR / "report.py"]
     files += sorted((MIGRATIONS_DIR / "versions").glob("*.sql"))
     files += [TESTS_DIR / name for name in INTEGRITY_TEST_FILES]
     return files
@@ -56,7 +56,7 @@ class _LocalBundling:
         shutil.copy2(HANDLER_DIR / "handler.py", out / "handler.py")
         shutil.copy2(HANDLER_DIR / "rds-global-bundle.crt", out / "rds-global-bundle.crt")
         shutil.copytree(MIGRATIONS_DIR / "versions", out / "migrations" / "versions", ignore=_IGNORE)
-        for name in ("migrate.py", "verify.py"):
+        for name in ("migrate.py", "verify.py", "report.py"):
             shutil.copy2(MIGRATIONS_DIR / name, out / "migrations" / name)
         (out / "tests" / "db").mkdir(parents=True)
         for name in INTEGRITY_TEST_FILES:

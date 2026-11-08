@@ -5,6 +5,7 @@ Invoke with one of:
   {"action": "up", "password": "<db password>"}
   {"action": "check", "password": "<db password>"}
   {"action": "verify", "password": "<db password>"}
+  {"action": "report", "password": "<db password>"}      dump the schema as JSON (structure + hash)
   {"action": "integrity", "password": "<db password>"}     run the constraint tests; every test is rolled back
   {"action": "down", "steps": N, "confirm": "drop-data", "password": "<db password>"}   revert the newest N versions
 
@@ -37,7 +38,7 @@ sys.path.insert(0, str(MIGRATIONS_DIR))
 import migrate  # noqa: E402
 
 CA_BUNDLE = ROOT / "rds-global-bundle.crt"
-SIMPLE_ACTIONS = ("status", "up", "check", "verify")
+SIMPLE_ACTIONS = ("status", "up", "check", "verify", "report")
 ALL_ACTIONS = SIMPLE_ACTIONS + ("down", "integrity")
 
 
@@ -68,6 +69,10 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
             code, output = _run_integrity()
         elif action == "down":
             code, output = _run_migrate(["down", "--steps", str(steps), "--yes"])
+        elif action == "report":
+            # The report writes only JSON to stdout; the "target:" line goes to
+            # stderr. Drop stderr so the output is pure JSON (parseable with jq).
+            code, output = _run_migrate(["report"], drop_stderr=True)
         else:
             code, output = _run_migrate([action])
     finally:
@@ -89,14 +94,16 @@ def _configure_environment(password: str) -> None:
     os.environ["PGSSLROOTCERT"] = str(CA_BUNDLE)
 
 
-def _run_migrate(argv: list[str]) -> tuple[int, str]:
+def _run_migrate(argv: list[str], *, drop_stderr: bool = False) -> tuple[int, str]:
     out = io.StringIO()
+    err = io.StringIO()
     try:
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = migrate.main(argv)
     except (Exception, SystemExit) as exc:
         return 3, out.getvalue() + f"ERROR: {type(exc).__name__}"
-    return int(code or 0), out.getvalue()
+    output = out.getvalue() if drop_stderr else out.getvalue() + err.getvalue()
+    return int(code or 0), output
 
 
 def _run_integrity() -> tuple[int, str]:
