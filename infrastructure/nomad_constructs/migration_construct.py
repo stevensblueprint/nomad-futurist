@@ -14,7 +14,6 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_lambda as lambda_,
     aws_logs as logs,
-    aws_secretsmanager as secretsmanager,
 )
 from constructs import Construct
 
@@ -86,7 +85,9 @@ class MigrationConstruct(Construct):
         availability_zone: str,
         subnet_id: str,
         db_security_group_id: str,
-        secret_name: str,
+        db_host: str,
+        db_user: str,
+        db_name: str,
     ) -> None:
         super().__init__(scope, construct_id)
 
@@ -110,37 +111,14 @@ class MigrationConstruct(Construct):
             description="DB migrator Lambda",
             allow_all_outbound=False,
         )
-        # Adds an ingress rule to the existing RDS security group (a separate resource).
-        # The existing 155.246.151.34/32 rule is not touched.
+        # Adds an ingress rule to the existing RDS security group and the matching
+        # egress rule to the migrator security group. The existing 155.246.151.34/32
+        # rule is not touched.
         db_sg = ec2.SecurityGroup.from_security_group_id(
             self, "DbSecurityGroup", db_security_group_id
         )
         db_sg.connections.allow_from(
             migrator_sg, ec2.Port.tcp(5432), "DB migrator Lambda to PostgreSQL"
-        )
-
-        # The VPC has no internet gateway, so Secrets Manager needs a private endpoint.
-        endpoint_sg = ec2.SecurityGroup(
-            self,
-            "SecretsEndpointSecurityGroup",
-            vpc=vpc,
-            description="Secrets Manager endpoint for the DB migrator",
-            allow_all_outbound=False,
-        )
-        endpoint_sg.connections.allow_from(
-            migrator_sg, ec2.Port.tcp(443), "DB migrator Lambda to Secrets Manager"
-        )
-        ec2.InterfaceVpcEndpoint(
-            self,
-            "SecretsManagerEndpoint",
-            vpc=vpc,
-            service=ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
-            subnets=subnets,
-            security_groups=[endpoint_sg],
-            private_dns_enabled=True,
-            # Only the explicit `allow_from(migrator_sg)` rule should open 443;
-            # without this, CDK adds a default rule for the whole VPC CIDR.
-            open=False,
         )
 
         log_group = logs.LogGroup(
@@ -173,10 +151,11 @@ class MigrationConstruct(Construct):
             vpc_subnets=subnets,
             security_groups=[migrator_sg],
             allow_public_subnet=False,
-            environment={"DB_SECRET_NAME": secret_name},
+            environment={
+                "DB_HOST": db_host,
+                "DB_USER": db_user,
+                "DB_NAME": db_name,
+                "DB_PORT": "5432",
+            },
             log_group=log_group,
         )
-
-        # The secret is created by hand. It is only referenced here, never defined.
-        secret = secretsmanager.Secret.from_secret_name_v2(self, "DbSecret", secret_name)
-        secret.grant_read(self.function)

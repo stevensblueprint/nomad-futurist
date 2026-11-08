@@ -8,13 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 HANDLER_DIR = Path(__file__).resolve().parent.parent / "functions" / "db_migrator"
-SECRET = {
-    "username": "nomad",
-    "password": "s3cr3t-value",
-    "host": "db.example.internal",
-    "port": 5432,
-    "dbname": "postgres",
-}
+PASSWORD = "s3cr3t-value"
 
 
 def load_handler(main):
@@ -38,23 +32,30 @@ class HandlerTest(unittest.TestCase):
             return 0
 
         self.handler = load_handler(fake_main)
-        self.handler._load_secret = lambda: dict(SECRET)
-        self.env = mock.patch.dict(os.environ, {}, clear=False)
+        self.env = mock.patch.dict(
+            os.environ,
+            {"DB_HOST": "db.example.internal", "DB_USER": "nomad"},
+            clear=False,
+        )
         self.env.start()
         self.addCleanup(self.env.stop)
 
+    def invoke(self, event):
+        return self.handler.handler(event, None)
+
     def test_unknown_action_is_rejected(self) -> None:
-        result = self.handler.handler({"action": "drop_everything"}, None)
+        result = self.invoke({"action": "drop_everything", "password": PASSWORD})
         self.assertEqual(2, result["exitCode"])
         self.assertFalse(result["ok"])
         self.assertEqual([], self.calls)
 
     def test_missing_action_is_rejected(self) -> None:
-        self.assertEqual(2, self.handler.handler({}, None)["exitCode"])
-        self.assertEqual(2, self.handler.handler(None, None)["exitCode"])
+        self.assertEqual(2, self.invoke({})["exitCode"])
+        self.assertEqual(2, self.invoke(None)["exitCode"])
+        self.assertEqual(2, self.invoke({"password": PASSWORD})["exitCode"])
 
     def test_up_calls_the_runner_and_sets_tls_environment(self) -> None:
-        result = self.handler.handler({"action": "up"}, None)
+        result = self.invoke({"action": "up", "password": PASSWORD})
         self.assertEqual([["up"]], self.calls)
         self.assertEqual(0, result["exitCode"])
         self.assertTrue(result["ok"])
@@ -65,11 +66,12 @@ class HandlerTest(unittest.TestCase):
         self.assertEqual("postgres", os.environ["PGDATABASE"])
         self.assertEqual("verify-full", os.environ["PGSSLMODE"])
         self.assertTrue(os.environ["PGSSLROOTCERT"].endswith("rds-global-bundle.crt"))
+        self.assertNotIn("PGPASSWORD", os.environ)
 
     def test_each_simple_action_maps_to_the_runner_command(self) -> None:
         for action in ("status", "check", "verify"):
             self.calls.clear()
-            self.handler.handler({"action": action}, None)
+            self.invoke({"action": action, "password": PASSWORD})
             self.assertEqual([[action]], self.calls)
 
     def test_down_needs_confirmation_and_valid_steps(self) -> None:
@@ -82,79 +84,111 @@ class HandlerTest(unittest.TestCase):
             {"action": "down", "steps": "2", "confirm": "drop-data"},
             {"action": "down", "steps": True, "confirm": "drop-data"},
         ):
-            self.assertEqual(2, self.handler.handler(event, None)["exitCode"], event)
+            self.assertEqual(2, self.invoke(event)["exitCode"], event)
         self.assertEqual([], self.calls)
 
     def test_down_with_confirmation_passes_steps(self) -> None:
-        self.handler.handler({"action": "down", "steps": 2, "confirm": "drop-data"}, None)
+        self.invoke({"action": "down", "steps": 2, "confirm": "drop-data", "password": PASSWORD})
         self.assertEqual([["down", "--steps", "2", "--yes"]], self.calls)
 
+    def test_password_is_required(self) -> None:
+        for event in ({"action": "up"}, {"action": "status"}):
+            result = self.invoke(event)
+            self.assertEqual(2, result["exitCode"], event)
+            self.assertIn('a non-empty "password" string is required', result["output"])
+        self.assertEqual([], self.calls)
+
+    def test_password_must_be_a_non_empty_string(self) -> None:
+        for value in (None, 123, True, ["x"]):
+            result = self.invoke({"action": "up", "password": value})
+            self.assertEqual(2, result["exitCode"], repr(value))
+            self.assertNotIn(str(value), json.dumps(result))
+        result = self.invoke({"action": "up", "password": ""})
+        self.assertEqual(2, result["exitCode"])
+        self.assertEqual([], self.calls)
+
+    def test_event_cannot_override_connection_settings(self) -> None:
+        self.invoke(
+            {
+                "action": "status",
+                "password": PASSWORD,
+                "host": "evil.example",
+                "user": "evil",
+                "dbname": "evil",
+                "port": 9999,
+            }
+        )
+        self.assertEqual("db.example.internal", os.environ["PGHOST"])
+        self.assertEqual("5432", os.environ["PGPORT"])
+        self.assertEqual("nomad", os.environ["PGUSER"])
+        self.assertEqual("postgres", os.environ["PGDATABASE"])
+
+    def test_missing_db_host_returns_3(self) -> None:
+        with mock.patch.dict(os.environ, {"DB_HOST": ""}):
+            result = self.invoke({"action": "up", "password": PASSWORD})
+        self.assertEqual(3, result["exitCode"])
+        self.assertIn("missing configuration: DB_HOST", result["output"])
+        self.assertNotIn("DB_USER", result["output"])
+        self.assertEqual([], self.calls)
+
+    def test_missing_db_user_returns_3(self) -> None:
+        with mock.patch.dict(os.environ, {"DB_USER": ""}):
+            result = self.invoke({"action": "up", "password": PASSWORD})
+        self.assertEqual(3, result["exitCode"])
+        self.assertIn("missing configuration: DB_USER", result["output"])
+        self.assertNotIn("DB_HOST", result["output"])
+        self.assertEqual([], self.calls)
+
+    def test_missing_both_returns_3_naming_both(self) -> None:
+        with mock.patch.dict(os.environ, {"DB_HOST": "", "DB_USER": ""}):
+            result = self.invoke({"action": "up", "password": PASSWORD})
+        self.assertEqual(3, result["exitCode"])
+        self.assertIn("DB_HOST", result["output"])
+        self.assertIn("DB_USER", result["output"])
+        self.assertEqual([], self.calls)
+
     def test_password_is_removed_from_output(self) -> None:
-        self.printed = f"connected with {SECRET['password']}\n"
-        result = self.handler.handler({"action": "status"}, None)
-        self.assertNotIn(SECRET["password"], json.dumps(result))
+        self.printed = f"connected with {PASSWORD}\n"
+        result = self.invoke({"action": "status", "password": PASSWORD})
+        self.assertNotIn(PASSWORD, json.dumps(result))
         self.assertIn("***", result["output"])
 
-    def test_secret_failure_returns_exit_code_3_without_details(self) -> None:
-        def broken():
-            raise RuntimeError("AccessDenied for secret nomad/db-migration")
+    def test_pgpassword_is_removed_after_the_run(self) -> None:
+        self.invoke({"action": "up", "password": PASSWORD})
+        self.assertNotIn("PGPASSWORD", os.environ)
 
-        self.handler._load_secret = broken
-        result = self.handler.handler({"action": "up"}, None)
-        self.assertEqual(3, result["exitCode"])
-        self.assertIn("RuntimeError", result["output"])
-        self.assertNotIn("nomad/db-migration", result["output"])
-        self.assertEqual([], self.calls)
+    def test_pgpassword_is_removed_after_an_exception(self) -> None:
+        def boom(argv):
+            raise RuntimeError("boom")
+
+        self.handler._run_migrate = boom
+        with self.assertRaises(RuntimeError):
+            self.invoke({"action": "up", "password": PASSWORD})
+        self.assertNotIn("PGPASSWORD", os.environ)
 
     def test_runner_exception_returns_exit_code_3(self) -> None:
         def boom(argv):
             raise ValueError("bad")
 
         self.handler.migrate.main = boom
-        result = self.handler.handler({"action": "up"}, None)
+        result = self.invoke({"action": "up", "password": PASSWORD})
         self.assertEqual(3, result["exitCode"])
 
     def test_sslmode_can_be_overridden_for_local_testing(self) -> None:
         with mock.patch.dict(os.environ, {"DB_SSLMODE": "disable"}):
-            self.handler.handler({"action": "status"}, None)
+            self.invoke({"action": "status", "password": PASSWORD})
             self.assertEqual("disable", os.environ["PGSSLMODE"])
 
     def test_integrity_action_uses_the_integrity_runner(self) -> None:
-        self.handler._run_integrity = lambda secret: (0, "45 passed")
-        result = self.handler.handler({"action": "integrity"}, None)
+        self.handler._run_integrity = lambda: (0, "45 passed")
+        result = self.invoke({"action": "integrity", "password": PASSWORD})
         self.assertEqual("45 passed", result["output"])
         self.assertEqual([], self.calls)
 
-    def test_load_secret_parses_json_and_applies_defaults(self) -> None:
-        handler = load_handler(lambda argv: 0)
-        fake_boto3 = types.SimpleNamespace(
-            client=lambda name: types.SimpleNamespace(
-                get_secret_value=lambda SecretId: {
-                    "SecretString": json.dumps(
-                        {"username": "u", "password": "p", "host": "h"}
-                    )
-                }
-            )
-        )
-        with mock.patch.dict(sys.modules, {"boto3": fake_boto3}), mock.patch.dict(
-            os.environ, {"DB_SECRET_NAME": "nomad/db-migration"}
-        ):
-            secret = handler._load_secret()
-        self.assertEqual(5432, secret["port"])
-        self.assertEqual("postgres", secret["dbname"])
-
-    def test_load_secret_rejects_missing_keys(self) -> None:
-        handler = load_handler(lambda argv: 0)
-        fake_boto3 = types.SimpleNamespace(
-            client=lambda name: types.SimpleNamespace(
-                get_secret_value=lambda SecretId: {"SecretString": json.dumps({"username": "u"})}
-            )
-        )
-        with mock.patch.dict(sys.modules, {"boto3": fake_boto3}), mock.patch.dict(
-            os.environ, {"DB_SECRET_NAME": "x"}
-        ):
-            with self.assertRaises(ValueError) as ctx:
-                handler._load_secret()
-        # The error names the missing keys and never prints secret values.
-        self.assertIn("host", str(ctx.exception))
-        self.assertIn("password", str(ctx.exception))
+    def test_env_defaults_for_port_and_dbname(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DB_PORT", None)
+            os.environ.pop("DB_NAME", None)
+            self.invoke({"action": "status", "password": PASSWORD})
+            self.assertEqual("5432", os.environ["PGPORT"])
+            self.assertEqual("postgres", os.environ["PGDATABASE"])

@@ -106,8 +106,8 @@ read -rs PGPASSWORD && export PGPASSWORD
 Credentials are never committed to the repo and never passed on the command
 line. `.pgpass` and `*.pem` are in `.gitignore`.
 
-On RDS the password is stored in the Secrets Manager secret `nomad/db-migration`,
-not in environment variables; see Section 5.
+On RDS the password is sent in the Lambda invoke payload for each run, not
+stored in environment variables; see Section 5.
 
 For direct connections, TLS is required. Set:
 
@@ -156,33 +156,7 @@ AWS_PROFILE=bp2 aws rds create-db-snapshot \
 
 A snapshot `db-nomad-pre-schema-20261103` already exists.
 
-### 5.2 Create the secret
-
-The Lambda reads its credentials from the Secrets Manager secret
-`nomad/db-migration`. It holds JSON keys `username`, `password`, `host`, and the
-optional `port` and `dbname` (defaults `5432` and `postgres`). Use host
-`db-nomad.cjee06yueexr.us-east-1.rds.amazonaws.com`, username `nomad`, dbname
-`postgres`.
-
-Create it without putting the password in shell history or the repo:
-
-```bash
-umask 077
-TMP=$(mktemp)
-read -rs PW
-jq -n --arg pw "$PW" '{username:"nomad",password:$pw,host:"db-nomad.cjee06yueexr.us-east-1.rds.amazonaws.com",port:5432,dbname:"postgres"}' > "$TMP"
-AWS_PROFILE=bp2 aws secretsmanager create-secret --name nomad/db-migration --secret-string "file://$TMP"
-rm -f "$TMP"
-unset PW
-```
-
-`jq` escapes any special character in the password. The file is created with
-mode 600 (`umask 077`) and removed at once. Use a directory on a disk you trust
-for `mktemp`, not a shared one. Creating the secret needs the
-`secretsmanager:CreateSecret` permission; the `nomad` IAM group does not have it
-today.
-
-### 5.3 Review the diff
+### 5.2 Review the diff
 
 From `infrastructure/` with the venv active:
 
@@ -195,33 +169,64 @@ npx cdk diff NomadStack
 
 The first shows the new stack (only additions). The second must show no change.
 
-### 5.4 Deploy
+### 5.3 Deploy
 
 ```bash
 npx cdk deploy NomadMigrationStack -c deploy_migrator=true
 ```
 
-### 5.5 Invoke the Lambda
+### 5.4 Invoke the Lambda
 
-Invoke in this order and check that `exitCode` is `0` in each output:
+Define this function once per shell. It asks for the password, writes the
+payload to a mode-600 temp file, invokes, then deletes the file. The password
+is never on a command line and never in shell history:
 
 ```bash
-aws lambda invoke --function-name nomad-db-migrator \
-  --cli-binary-format raw-in-base64-out \
-  --payload '{"action":"status"}' out.json && cat out.json
+invoke_migrator() {
+  local TMP
+  umask 077
+  TMP=$(mktemp)
+  read -rs -p "database password: " PW
+  echo
+  jq -n --arg a "$1" --arg pw "$PW" '{action:$a,password:$pw}' > "$TMP"
+  aws lambda invoke --function-name nomad-db-migrator \
+    --cli-binary-format raw-in-base64-out \
+    --payload "file://$TMP" out.json >/dev/null
+  rm -f "$TMP"
+  unset PW
+  jq -r .output out.json
+}
 ```
 
-Or with jq:
+Run these actions in order and check that `exitCode` is `0` in each output:
 
 ```bash
+invoke_migrator status
+invoke_migrator up
+invoke_migrator up       # second run: "nothing to do"
+invoke_migrator check
+invoke_migrator verify
+invoke_migrator integrity
+```
+
+To see the full result JSON (not just `output`), run `cat out.json`. Delete
+`out.json` when done; do not commit it (add nothing to git).
+
+Test the function without calling AWS. This fake `aws` reads the payload file
+and writes a result that echoes only the action, so you can confirm the payload
+was built and the password is not in `out.json`:
+
+```bash
+aws() {
+  local src=""
+  for a in "$@"; do case "$a" in file://*) src="${a#file://}";; esac; done
+  jq '{exitCode:0, ok:true, output:("fake: " + .action)}' "$src" > out.json
+}
+invoke_migrator status
 jq -r .output out.json
 ```
 
-Run these actions in order: `status`, `up`, `up`, `check`, `verify`,
-`integrity`. The second `up` says `nothing to do`. Delete `out.json` when done;
-do not commit it (add nothing to git).
-
-### 5.6 Remove the stack
+### 5.5 Remove the stack
 
 When no longer needed:
 
@@ -229,20 +234,19 @@ When no longer needed:
 npx cdk destroy NomadMigrationStack -c deploy_migrator=true
 ```
 
-The secret is not managed by CDK. It stays until you delete it by hand.
-
 ### Actions
 
 | Action | Payload | Effect |
 | --- | --- | --- |
-| `status` | `{"action":"status"}` | list applied and pending versions |
-| `up` | `{"action":"up"}` | apply pending versions |
-| `check` | `{"action":"check"}` | report versions pending or differing from the repo |
-| `verify` | `{"action":"verify"}` | verify the deployed schema |
-| `integrity` | `{"action":"integrity"}` | run the constraint tests; every test is rolled back |
-| `down` | `{"action":"down","steps":N,"confirm":"drop-data"}` | revert the newest N versions (`steps` is required) |
+| `status` | `{"action":"status","password":"..."}` | list applied and pending versions |
+| `up` | `{"action":"up","password":"..."}` | apply pending versions |
+| `check` | `{"action":"check","password":"..."}` | report versions pending or differing from the repo |
+| `verify` | `{"action":"verify","password":"..."}` | verify the deployed schema |
+| `integrity` | `{"action":"integrity","password":"..."}` | run the constraint tests; every test is rolled back |
+| `down` | `{"action":"down","steps":N,"confirm":"drop-data","password":"..."}` | revert the newest N versions (`steps` is required) |
 
-The result is JSON: `{"exitCode": n, "ok": bool, "output": text}`.
+The result is JSON: `{"exitCode": n, "ok": bool, "output": text}`. The password
+is replaced with `***` in `output`.
 
 Exit codes:
 
@@ -250,17 +254,22 @@ Exit codes:
 | --- | --- |
 | `0` | ok |
 | `1` | `check` has only pending versions, or `verify` found problems |
-| `2` | refused (`down` without confirmation), mismatch (`check`), or a bad request |
-| `3` | error (secret read failure or a migration error) |
+| `2` | refused (`down` without confirmation), mismatch (`check`), a bad request, or a missing or invalid password |
+| `3` | error (missing configuration or a migration error) |
 
 ### Cost and security
 
-- The Lambda role can read only that one secret. The password is removed from
-  the Lambda output.
+- There is no VPC endpoint and no NAT gateway. The migrator security group has
+  `allow_all_outbound=False` and one egress rule, so it can send traffic only to
+  the database on TCP 5432.
+- The database password is sent in the invoke payload, over TLS to the Lambda
+  API. It is removed from the Lambda output and is not stored by the function.
+- The password does appear in the AWS API call that you make. It is not stored
+  in the function configuration. CloudTrail Lambda data events, if enabled in
+  the account, may record request parameters, so use a password you can rotate.
+  Reset the database password after the migration if the account logs Lambda
+  data events.
 - TLS is `verify-full` with the bundled AWS RDS CA bundle.
-- One Secrets Manager interface endpoint in one subnet exists while the stack
-  exists: about $0.01 per hour per AZ (roughly $7 a month).
-- The secret costs about $0.40 a month.
 - The only inbound change on the RDS security group is port 5432 from the
   migrator security group. The existing `155.246.151.34/32` rule is unchanged.
 - The RDS security group belongs to `NomadStack` (from `rds_template.yaml`), and
@@ -350,9 +359,17 @@ Always take a snapshot first (Section 5.1).
    explicit confirmation. This drops tables and data, so snapshot first:
 
    ```bash
+   umask 077
+   TMP=$(mktemp)
+   read -rs -p "database password: " PW
+   echo
+   jq -n --arg pw "$PW" '{action:"down",steps:1,confirm:"drop-data",password:$pw}' > "$TMP"
    aws lambda invoke --function-name nomad-db-migrator \
      --cli-binary-format raw-in-base64-out \
-     --payload '{"action":"down","steps":1,"confirm":"drop-data"}' out.json && cat out.json
+     --payload "file://$TMP" out.json >/dev/null
+   rm -f "$TMP"
+   unset PW
+   cat out.json
    ```
 
    For a reachable database, `uv run python migrations/migrate.py down --steps 1 --yes` (from `backend/`).
