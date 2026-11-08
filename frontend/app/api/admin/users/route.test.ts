@@ -52,7 +52,10 @@ const validHeaders = {
 };
 
 describe("POST /api/admin/users", () => {
+  let errorLog: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
+    errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     vi.stubEnv("API_BASE_URL", "https://api.example.com/dev/");
@@ -60,6 +63,7 @@ describe("POST /api/admin/users", () => {
   });
 
   afterEach(() => {
+    errorLog.mockRestore();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
@@ -124,9 +128,66 @@ describe("POST /api/admin/users", () => {
     expect(response.status).toBe(500);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(await response.json()).toEqual({
-      message: "API configuration is missing.",
+      message: "API configuration is missing. Check API_BASE_URL in frontend/.env.local.",
     });
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.stringContaining("API_BASE_URL is not set"),
+      {},
+    );
+  });
+
+  it("omits the .env.local hint in production", async () => {
+    vi.stubEnv("API_BASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "");
+    vi.stubEnv("NODE_ENV", "production");
+
+    const response = await POST(makeRequest(validHeaders));
+
+    expect(await response.json()).toEqual({
+      message: "API configuration is missing.",
+    });
+  });
+
+  it("logs the failure reason without the token or email when fetch rejects", async () => {
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+
+    await POST(
+      makeRequest(validHeaders, '{"email":"private@example.com","role":"Mentors"}'),
+    );
+
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.stringContaining("Upstream request failed"),
+      { error: "TypeError" },
+    );
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain("id-token");
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain("private@example.com");
+  });
+
+  it("logs the status and request id for an upstream 5xx without exposing its body", async () => {
+    fetchMock.mockResolvedValue({
+      ...upstreamResponse(500, '{"message":"internal detail"}'),
+      headers: new Headers({ "x-amzn-requestid": "req-123" }),
+    });
+
+    const response = await POST(makeRequest(validHeaders));
+
+    expect(await response.json()).toEqual({});
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.stringContaining("Upstream returned a server error"),
+      { status: 500, requestId: "req-123" },
+    );
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain("internal detail");
+  });
+
+  it("does not log expected client errors such as a duplicate user", async () => {
+    fetchMock.mockResolvedValue(
+      upstreamResponse(409, '{"message":"An account already exists for this email."}'),
+    );
+
+    await POST(makeRequest(validHeaders));
+
+    expect(errorLog).not.toHaveBeenCalled();
   });
 
   it("returns 415 when Content-Type is not JSON", async () => {

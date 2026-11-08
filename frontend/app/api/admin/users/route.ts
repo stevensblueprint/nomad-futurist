@@ -5,6 +5,15 @@ const MAX_UPSTREAM_BYTES = 64 * 1024;
 
 const BEARER_PATTERN = /^Bearer\s+\S+$/;
 
+// Server-side diagnostics only. Never log the token, the email or upstream bodies.
+function logFailure(reason: string, details: Record<string, unknown> = {}): void {
+  console.error(`[admin-users] ${reason}`, details);
+}
+
+function errorName(error: unknown): string {
+  return error instanceof Error ? error.name : typeof error;
+}
+
 function json(data: unknown, status: number): Response {
   return Response.json(data, {
     status,
@@ -61,7 +70,16 @@ export async function POST(request: Request): Promise<Response> {
     process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL,
   );
   if (!endpoint) {
-    return json({ message: "API configuration is missing." }, 500);
+    logFailure("API_BASE_URL is not set; the invite request was not forwarded");
+    return json(
+      {
+        message:
+          process.env.NODE_ENV === "production"
+            ? "API configuration is missing."
+            : "API configuration is missing. Check API_BASE_URL in frontend/.env.local.",
+      },
+      500,
+    );
   }
 
   const contentLength = request.headers.get("Content-Length");
@@ -89,7 +107,8 @@ export async function POST(request: Request): Promise<Response> {
       redirect: "manual",
       signal: AbortSignal.any([AbortSignal.timeout(10_000), request.signal]),
     });
-  } catch {
+  } catch (error) {
+    logFailure("Upstream request failed", { error: errorName(error) });
     return json({ message: "Unable to reach the server." }, 502);
   }
 
@@ -105,6 +124,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (upstream.status >= 300 && upstream.status < 400) {
+    logFailure("Upstream returned a redirect", { status: upstream.status });
     return json({ message: "Unable to reach the server." }, 502);
   }
 
@@ -112,10 +132,14 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const result = await readLimited(upstream.body, MAX_UPSTREAM_BYTES);
     if (result === null) {
+      logFailure("Upstream response body was too large");
       return json({ message: "Unable to reach the server." }, 502);
     }
     upstreamBuffer = result;
-  } catch {
+  } catch (error) {
+    logFailure("Reading the upstream response failed", {
+      error: errorName(error),
+    });
     return json({ message: "Unable to reach the server." }, 502);
   }
 
@@ -135,6 +159,10 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (upstream.status >= 500) {
+    logFailure("Upstream returned a server error", {
+      status: upstream.status,
+      requestId: upstream.headers?.get?.("x-amzn-requestid") ?? undefined,
+    });
     message = undefined;
   }
 

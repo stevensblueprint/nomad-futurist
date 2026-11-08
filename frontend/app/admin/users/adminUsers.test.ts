@@ -63,7 +63,12 @@ describe("messageForStatus", () => {
     expect(messageForStatus(401)).toBe("Session expired. Sign in again.");
     expect(messageForStatus(403)).toBe("Admin access required.");
     expect(messageForStatus(409)).toBe("An account already exists for this email.");
-    expect(messageForStatus(500)).toBe("Unable to provision the user.");
-    expect(messageForStatus(502)).toBe("Unable to provision the user.");
+    expect(messageForStatus(500)).toBe("Unable to provision the user. (Status 500)");
+    expect(messageForStatus(502)).toBe("Unable to provision the user. (Status 502)");
+  });
+  it("shows the route's own configuration message with the status for 500", () => {
+    expect(messageForStatus(500, "API configuration is missing.")).toBe(
+      "API configuration is missing. (Status 500)",
+    );
   });
 });

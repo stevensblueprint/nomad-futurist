@@ -145,7 +145,32 @@ describe("AdminUsersForm", () => {
     await user.selectOptions(screen.getByLabelText("Role"), "TechnicalStaff");
     await user.click(screen.getByRole("button", { name: "Send invitation" }));
 
-    expect(await screen.findByText("Unable to provision the user.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Unable to provision the user. (Status 500)"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the missing API configuration message from the route", async () => {
+    const user = userEvent.setup();
+    getCurrentUser.mockResolvedValue({ username: "admin" });
+    fetchAuthSession.mockResolvedValue(sessionWithGroups(["Admin"]));
+    fetchMock.mockResolvedValue({
+      status: 500,
+      json: async () => ({
+        message: "API configuration is missing. Check API_BASE_URL in frontend/.env.local.",
+      }),
+    });
+
+    render(<AdminUsersForm />);
+    await user.type(await screen.findByLabelText("Email address"), "staff@example.com");
+    await user.selectOptions(screen.getByLabelText("Role"), "TechnicalStaff");
+    await user.click(screen.getByRole("button", { name: "Send invitation" }));
+
+    expect(
+      await screen.findByText(
+        "API configuration is missing. Check API_BASE_URL in frontend/.env.local. (Status 500)",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("labels the provision roles", async () => {

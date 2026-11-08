@@ -29,11 +29,14 @@ export function buildUsersEndpoint(baseUrl: string | undefined): string | null {
 }
 
 export function messageForStatus(status: number, backendMessage?: string): string {
+  // The proxy route removes the message from upstream 5xx replies, so a 500
+  // message here comes from the route itself (missing API configuration).
+  if (status === 500 && backendMessage) return `${backendMessage} (Status 500)`;
   switch (status) {
     case 400: return backendMessage || "Check the email address and role.";
     case 401: return "Session expired. Sign in again.";
     case 403: return "Admin access required.";
     case 409: return "An account already exists for this email.";
-    default: return "Unable to provision the user.";
+    default: return `Unable to provision the user. (Status ${status})`;
   }
 }
