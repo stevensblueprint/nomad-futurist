@@ -243,7 +243,7 @@ npx cdk destroy NomadMigrationStack -c deploy_migrator=true
 | `check` | `{"action":"check","password":"..."}` | report versions pending or differing from the repo |
 | `verify` | `{"action":"verify","password":"..."}` | verify the deployed schema |
 | `report` | `{"action":"report","password":"..."}` | dump the schema as JSON (structure + hash) |
-| `integrity` | `{"action":"integrity","password":"..."}` | run the constraint tests; every test is rolled back |
+| `integrity` | `{"action":"integrity","password":"..."}` | run the constraint tests plus a check that the schema matches Section 5 of the design doc and the structural requirements of issue #44; every test is rolled back |
 | `down` | `{"action":"down","steps":N,"confirm":"drop-data","password":"..."}` | revert the newest N versions (`steps` is required) |
 
 The result is JSON: `{"exitCode": n, "ok": bool, "output": text}`. The password
@@ -279,7 +279,9 @@ Exit codes:
   migrator rule. Then the migrator cannot reach the database. If that happens,
   deploy `NomadMigrationStack` again to restore the rule. Removing the migration
   stack removes only its own rule.
-- `integrity` runs about 97 tests. Failure messages are plainer, because the Lambda
+- `integrity` runs about 255 tests: the constraint tests plus a conformance check
+  that the schema matches Section 5 of the design doc and the structural
+  requirements of issue #44. Failure messages are plainer, because the Lambda
   package is read-only and pytest cannot rewrite assertions.
 
 ### CDK CLI version
@@ -326,7 +328,9 @@ Exit codes:
 ## 7. Run the integrity tests with no residue
 
 On RDS, run the integrity tests through the Lambda action `integrity` (Section
-5). It runs the constraint tests and rolls back every test, so nothing commits.
+5). It runs the constraint tests plus a check that the schema matches Section 5
+of the design doc and the structural requirements of issue #44, and rolls back
+every test, so nothing commits.
 
 For a database you can reach directly, run the tests with pytest and
 `INTEGRITY_TARGET_DSN`:

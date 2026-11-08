@@ -185,6 +185,21 @@ class HandlerTest(unittest.TestCase):
         self.assertEqual("45 passed", result["output"])
         self.assertEqual([], self.calls)
 
+    def test_integrity_runs_both_constraint_and_section5_files(self) -> None:
+        argv = []
+
+        def fake_pytest_main(args):
+            argv.extend(args)
+            return 0
+
+        with mock.patch.dict(sys.modules, {"pytest": types.SimpleNamespace(main=fake_pytest_main)}):
+            code, output = self.handler._run_integrity()
+
+        self.assertEqual(0, code, output)
+        self.assertEqual("not round_trip", argv[argv.index("-k") + 1])
+        files = [Path(arg).name for arg in argv if arg.endswith(".py")]
+        self.assertEqual(["test_integrity.py", "test_section5.py"], files)
+
     def test_report_action_returns_pure_json(self) -> None:
         def fake_main(argv):
             self.calls.append(argv)
