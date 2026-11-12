@@ -7,6 +7,42 @@ from stacks.nomad_stack import NomadStack
 
 
 class ValidationRouteTest(unittest.TestCase):
+    def test_every_validation_method_uses_the_existing_cognito_authorizer(self) -> None:
+        app = cdk.App()
+        resources = assertions.Template.from_stack(
+            NomadStack(app, "ValidationAuthStack")
+        ).to_json()["Resources"]
+
+        def resource_id(path_part: str, parent_id: str | None = None) -> str:
+            return next(
+                key for key, resource in resources.items()
+                if resource["Type"] == "AWS::ApiGateway::Resource"
+                and resource["Properties"]["PathPart"] == path_part
+                and (parent_id is None or resource["Properties"]["ParentId"] == {"Ref": parent_id})
+            )
+
+        validation_id = resource_id("validation")
+        projects_id = resource_id("projects", validation_id)
+        by_id = resource_id("{projectId}", projects_id)
+        methods = {
+            (resource["Properties"]["ResourceId"].get("Ref"), resource["Properties"]["HttpMethod"]): resource["Properties"]
+            for resource in resources.values()
+            if resource["Type"] == "AWS::ApiGateway::Method"
+        }
+        existing_authorizer = next(
+            resource["Properties"]["AuthorizerId"]
+            for resource in resources.values()
+            if resource["Type"] == "AWS::ApiGateway::Method"
+            and resource["Properties"].get("AuthorizationType") == "COGNITO_USER_POOLS"
+        )
+
+        for route in ((projects_id, "GET"), (by_id, "GET"), (by_id, "POST"), (by_id, "PATCH")):
+            with self.subTest(route=route):
+                method = methods[route]
+                self.assertEqual("COGNITO_USER_POOLS", method["AuthorizationType"])
+                self.assertEqual(existing_authorizer, method["AuthorizerId"])
+        self.assertEqual("NONE", methods[(projects_id, "OPTIONS")]["AuthorizationType"])
+
     def test_validation_project_patch_route_targets_the_validation_lambda(self) -> None:
         app = cdk.App()
         stack = NomadStack(app, "TestNomadStack")

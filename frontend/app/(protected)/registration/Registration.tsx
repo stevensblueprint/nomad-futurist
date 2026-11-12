@@ -26,7 +26,11 @@ const emptyValues: RegistrationValues = {
   maximum: "",
 };
 
-type Gate = "checking" | "founder" | "denied";
+type Gate = "checking" | "founder" | "viewer";
+
+function hasFounderAccess(groups: unknown): boolean {
+  return Array.isArray(groups) && groups.includes("Founders");
+}
 
 export default function Registration() {
   const router = useRouter();
@@ -49,7 +53,7 @@ export default function Registration() {
           return;
         }
         const groups = session.tokens.idToken.payload["cognito:groups"];
-        setGate(Array.isArray(groups) && groups.includes("Founders") ? "founder" : "denied");
+        setGate(hasFounderAccess(groups) ? "founder" : "viewer");
       })
       .catch(() => {
         if (active) router.replace("/sign-in");
@@ -82,7 +86,7 @@ export default function Registration() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submittingRef.current || pending) return;
+    if (gate !== "founder" || submittingRef.current || pending) return;
     const nextErrors = validateRegistration(values);
     setErrors(nextErrors);
     const firstError = Object.keys(nextErrors)[0] as RegistrationField | undefined;
@@ -104,12 +108,19 @@ export default function Registration() {
     setStatus("Submitting your project details…");
     try {
       const session = await fetchAuthSession();
-      const token = session.tokens?.idToken?.toString();
-      if (!token) {
+      const idToken = session.tokens?.idToken;
+      if (!idToken) {
         router.replace("/sign-in");
         return;
       }
 
+      if (!hasFounderAccess(idToken.payload["cognito:groups"])) {
+        setGate("viewer");
+        setStatus("Only Founder accounts can submit project registrations.");
+        return;
+      }
+
+      const token = idToken.toString();
       const expected = registrationPayload(values);
       const response = await fetch(projectsEndpoint(baseUrl), {
         method: "POST",
@@ -135,8 +146,8 @@ export default function Registration() {
       } else if (response.status === 401) {
         setStatus("Your sign-in has expired. Please sign in again.");
       } else if (response.status === 403) {
-        setGate("denied");
-        setStatus("Your account does not have Founder access.");
+        setGate("viewer");
+        setStatus("Your account does not have permission to submit projects.");
       } else if (response.status === 400 && isRecord(body) && isRecord(body.errors)) {
         const serverErrors: RegistrationErrors = {};
         for (const field of Object.keys(emptyValues) as RegistrationField[]) {
@@ -172,18 +183,6 @@ export default function Registration() {
   if (gate === "checking") {
     return <main className={styles.page} aria-live="polite">Checking your sign-in…</main>;
   }
-  if (gate === "denied") {
-    return (
-      <main className={styles.page}>
-        <section className={styles.content} aria-labelledby="register-heading">
-          <h1 id="register-heading">Founder access required</h1>
-          <p>Your account does not have access to project registration.</p>
-          <p><Link href="/">Return home</Link></p>
-        </section>
-      </main>
-    );
-  }
-
   return (
     <main className={styles.page}>
       <section className={styles.content} aria-labelledby="register-heading">
@@ -192,8 +191,18 @@ export default function Registration() {
           <p>Share what you are building and the support you need.</p>
         </header>
 
+        {gate === "viewer" && (
+          <div className={styles.placeholder} role="status">
+            <strong>Read-only preview</strong>
+            <span>
+              You can review the Project Registration form, but only Founders
+              can submit new projects.
+            </span>
+          </div>
+        )}
+
         <form className={styles.form} noValidate onSubmit={submit}>
-          <fieldset className={styles.formFields} disabled={pending}>
+          <fieldset className={styles.formFields} disabled={pending || gate !== "founder"}>
             <div className={styles.field}>
               <label htmlFor="projectName">Project name</label>
               <input id="projectName" required value={values.projectName} onChange={(e) => change("projectName", e.target.value)} onBlur={() => validateField("projectName")} aria-invalid={Boolean(errors.projectName)} aria-describedby={errors.projectName ? "projectName-error" : undefined} />
@@ -249,9 +258,15 @@ export default function Registration() {
             </div>
           </fieldset>
           <p className={styles.formStatus} role={success ? "status" : "alert"} aria-live="polite" aria-atomic="true">{status}</p>
-          <button className={styles.submit} type="submit" disabled={pending || (success && JSON.stringify(values) === lastSuccessfulValues)}>
-            {pending ? "Submitting…" : "Submit registration"}
-          </button>
+          {gate === "founder" && (
+            <button
+              className={styles.submit}
+              type="submit"
+              disabled={pending || (success && JSON.stringify(values) === lastSuccessfulValues)}
+            >
+              {pending ? "Submitting…" : "Submit registration"}
+            </button>
+          )}
         </form>
         <p className={styles.footer}><Link href="/">Return home</Link></p>
       </section>
