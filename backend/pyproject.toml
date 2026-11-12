@@ -1,0 +1,12 @@
+[project]
+name = "nomad-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["psycopg[binary]>=3.2,<4"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["migrations"]
