@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test:registration": "node --test \"app/(protected)/registration/registration-utils.test.mjs\"",
     "test:auth": "node --test app/auth/authLogic.test.mjs",
-    "test:validation": "vitest run app/validation",
+    "test:validation": "vitest run \"app/(protected)/validation\"",
     "test:routing": "vitest run __tests__/session-routing.test.tsx",
     "test": "npm run test:registration && npm run test:auth && npm run test:validation && npm run test:routing && npm run test:auth-ui",
     "test:auth-ui": "vitest run app/auth/AuthForm.test.tsx"

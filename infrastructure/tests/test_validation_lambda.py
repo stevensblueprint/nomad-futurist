@@ -35,18 +35,27 @@ class ValidationLambdaTest(unittest.TestCase):
             ("POST", "/validation/projects/{projectId}"),
             ("PATCH", "/validation/projects/{projectId}"),
         )
-        for groups in (
-            "TechnicalStaff", "Mentors", "Founders,TechnicalStaff",
+        allowed_groups = (
+            "Admin", "TechnicalStaff", "Mentors",
+            "Founders,Admin", "Founders,TechnicalStaff",
             '["Admin", "Mentors"]', "[Admin, TechnicalStaff]",
             "[Mentors, Founders]",
-        ):
+        )
+        denied_groups = ("Founders", "Other", "Founders,Other", "", None, "[broken")
+
+        for groups in allowed_groups:
             for method, resource in routes:
                 with self.subTest(groups=groups, method=method, resource=resource):
-                    event = self.event('{"decision":"approved"}', project_id="project-456", method=method, groups=groups)
+                    event = self.event(
+                        '{"decision":"approved"}',
+                        project_id="project-456",
+                        method=method,
+                        groups=groups,
+                    )
                     event["resource"] = resource
                     self.assertNotIn(handler(event, None)["statusCode"], (401, 403))
 
-        for groups in ("Founders", "Admin", "Founders,Admin", "Other", "", None, '[broken'):
+        for groups in denied_groups:
             for method, resource in routes:
                 with self.subTest(groups=groups, method=method, resource=resource):
                     event = self.event('{"decision":"approved"}', method=method, groups=groups)
@@ -59,6 +68,19 @@ class ValidationLambdaTest(unittest.TestCase):
                 event = self.event('{"decision":"approved"}', method="POST")
                 event["requestContext"] = request_context
                 self.assertEqual(401, handler(event, None)["statusCode"])
+
+    def test_admin_only_can_create_and_update_project_validation(self) -> None:
+        validation = {"decision": "approved", "feedback": "Approved by Admin"}
+        create = handler(self.event(json.dumps(validation), method="POST", groups="Admin"), None)
+        self.assertEqual(201, create["statusCode"])
+        self.assertEqual(validation, json.loads(create["body"])["validation"])
+
+        update = handler(
+            self.event(json.dumps(validation), project_id="project-456", method="PATCH", groups="Admin"),
+            None,
+        )
+        self.assertEqual(200, update["statusCode"])
+        self.assertEqual(validation, json.loads(update["body"])["validation"])
 
     def test_validation_patch_updates_an_existing_mock_validation(self) -> None:
         validation = {

@@ -18,9 +18,11 @@ describe("ValidationForm", () => {
   beforeEach(() => {
     fetchAuthSession.mockReset();
     vi.stubEnv("NEXT_PUBLIC_PROJECT_API_URL", "https://api.example.test/dev");
-    fetchAuthSession.mockResolvedValue({ tokens: {
-      idToken: { payload: { "cognito:groups": ["TechnicalStaff"] }, toString: () => "staff-token" },
-    } });
+    fetchAuthSession.mockResolvedValue({
+      tokens: {
+        idToken: { payload: { "cognito:groups": ["TechnicalStaff"] }, toString: () => "staff-token" },
+      }
+    });
   });
 
   afterEach(() => {
@@ -38,15 +40,32 @@ describe("ValidationForm", () => {
     expect(screen.queryByRole("button", { name: "Submit validation" })).not.toBeInTheDocument();
   });
 
-  it.each([["Founders"], ["Admin"], ["Other"]])("denies an authenticated %s user", async (group) => {
-    fetchAuthSession.mockResolvedValue({ tokens: { idToken: { payload: { "cognito:groups": [group] }, toString: () => "token" } } });
-    render(<ValidationForm projectId="project-123" />);
-    expect(await screen.findByRole("heading", { name: "Validation access required" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Submit validation" })).not.toBeInTheDocument();
-  });
+  it.each(["Founders", "Other"])(
+    "denies an authenticated %s-only user",
+    async (group) => {
+      fetchAuthSession.mockResolvedValue({
+        tokens: {
+          idToken: { payload: { "cognito:groups": [group] }, toString: () => "token" },
+        },
+      });
+      render(<ValidationForm projectId="project-123" />);
+      expect(await screen.findByRole("heading", { name: "Validation access required" })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Submit validation" })).not.toBeInTheDocument();
+    },
+  );
 
-  it.each([["Mentors"], ["Admin", "TechnicalStaff"]])("allows a session with %s", async (...groups) => {
-    fetchAuthSession.mockResolvedValue({ tokens: { idToken: { payload: { "cognito:groups": groups }, toString: () => "allowed-token" } } });
+  it.each([
+    { name: "Admin only", groups: ["Admin"] },
+    { name: "TechnicalStaff only", groups: ["TechnicalStaff"] },
+    { name: "Mentors only", groups: ["Mentors"] },
+    { name: "Admin and TechnicalStaff", groups: ["Admin", "TechnicalStaff"] },
+    { name: "Founders and Admin", groups: ["Founders", "Admin"] },
+  ])("allows $name to view the validation form", async ({ groups }) => {
+    fetchAuthSession.mockResolvedValue({
+      tokens: {
+        idToken: { payload: { "cognito:groups": groups }, toString: () => "allowed-token" },
+      },
+    });
     render(<ValidationForm projectId="project-123" />);
     expect(await screen.findByRole("button", { name: "Submit validation" })).toBeVisible();
   });
@@ -97,6 +116,46 @@ describe("ValidationForm", () => {
     if (redirect) await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(redirect));
     else expect(await screen.findByRole("heading", { name: "Validation access required" })).toBeVisible();
     expect(screen.queryByText(/Validation created successfully/)).not.toBeInTheDocument();
+  });
+
+  it("allows an Admin-only account to submit a project validation", async () => {
+    fetchAuthSession.mockResolvedValue({
+      tokens: {
+        idToken: {
+          payload: { "cognito:groups": ["Admin"] },
+          toString: () => "admin-token",
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ValidationForm projectId="project-123" />);
+    await screen.findByRole("button", { name: "Submit validation" });
+
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Validation decision"), "approved");
+    await user.type(screen.getByLabelText("Reviewer feedback"), "Approved by Admin");
+    await user.type(screen.getByLabelText("Questions"), "No questions");
+    await user.type(screen.getByLabelText("Next steps"), "Proceed");
+    await user.click(screen.getByRole("button", { name: "Submit validation" }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.test/dev/validation/projects/project-123",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "admin-token",
+        },
+        body: JSON.stringify({
+          decision: "approved",
+          feedback: "Approved by Admin",
+          questions: "No questions",
+          nextSteps: "Proceed",
+        }),
+      },
+    );
+    expect(await screen.findByText("Validation created successfully.")).toBeVisible();
   });
 
   it("submits the validation object to the project validation endpoint", async () => {
