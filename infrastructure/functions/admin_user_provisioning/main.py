@@ -76,6 +76,7 @@ def handler(event, _context):
     try:
         user_pool_id = os.environ["USER_POOL_ID"]
     except KeyError:
+        LOGGER.error("USER_POOL_ID environment variable is not set")
         return _response(500, "Unable to provision the user.")
 
     created_user = False
@@ -100,13 +101,24 @@ def handler(event, _context):
             EmailMfaSettings={"Enabled": True, "PreferredMfa": True},
         )
     except ClientError as error:
+        error_code = error.response.get("Error", {}).get("Code")
+        if error_code == "UsernameExistsException" and not created_user:
+            return _response(409, "An account already exists for this email.")
+        # Log the cause without the invited email. The response stays generic.
+        LOGGER.exception(
+            "Cognito provisioning failed (code=%s, operation=%s, user_created=%s)",
+            error_code,
+            error.operation_name,
+            created_user,
+        )
         if created_user:
             _cleanup_user(cognito, user_pool_id, email)
-            return _response(500, "Unable to provision the user.")
-        if error.response["Error"]["Code"] == "UsernameExistsException":
-            return _response(409, "An account already exists for this email.")
         return _response(500, "Unable to provision the user.")
     except BotoCoreError:
+        LOGGER.exception(
+            "Cognito provisioning failed with a client error (user_created=%s)",
+            created_user,
+        )
         if created_user:
             _cleanup_user(cognito, user_pool_id, email)
         return _response(500, "Unable to provision the user.")

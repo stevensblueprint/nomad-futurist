@@ -260,6 +260,59 @@ class AdminUserProvisioningTest(unittest.TestCase):
         cognito.admin_delete_user.assert_called_once_with(UserPoolId="pool-id", Username="cleanup@example.com")
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
+    def test_cognito_failure_logs_error_code_without_email(self, client):
+        cognito = Mock()
+        cognito.admin_create_user.side_effect = ClientError(
+            {"Error": {"Code": "InvalidParameterException", "Message": "SES sandbox"}}, "AdminCreateUser"
+        )
+        client.return_value = cognito
+
+        with self.assertLogs("functions.admin_user_provisioning.main", level="ERROR") as logs:
+            result = handler(
+                self.event("Admin", json.dumps({"email": "private@example.com", "role": "Mentors"})), None
+            )
+
+        self.assertEqual(self.response(500, "Unable to provision the user."), result)
+        output = "\n".join(logs.output)
+        self.assertIn("InvalidParameterException", output)
+        self.assertIn("AdminCreateUser", output)
+        self.assertNotIn("private@example.com", output)
+
+    @patch("functions.admin_user_provisioning.main.boto3.client")
+    def test_boto_core_failure_is_logged(self, client):
+        client.side_effect = BotoCoreError()
+
+        with self.assertLogs("functions.admin_user_provisioning.main", level="ERROR"):
+            result = handler(
+                self.event("Admin", json.dumps({"email": "client@example.com", "role": "Mentors"})), None
+            )
+
+        self.assertEqual(self.response(500, "Unable to provision the user."), result)
+
+    @patch("functions.admin_user_provisioning.main.boto3.client")
+    def test_duplicate_user_conflict_is_not_logged_as_error(self, client):
+        cognito = Mock()
+        cognito.admin_create_user.side_effect = ClientError(
+            {"Error": {"Code": "UsernameExistsException", "Message": "duplicate"}}, "AdminCreateUser"
+        )
+        client.return_value = cognito
+
+        with self.assertNoLogs("functions.admin_user_provisioning.main", level="ERROR"):
+            result = handler(
+                self.event("Admin", json.dumps({"email": "dup@example.com", "role": "Mentors"})), None
+            )
+
+        self.assertEqual(self.response(409, "An account already exists for this email."), result)
+
+    @patch("functions.admin_user_provisioning.main.boto3.client")
+    def test_missing_user_pool_id_is_logged(self, client):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertLogs("functions.admin_user_provisioning.main", level="ERROR"):
+                handler(
+                    self.event("Admin", json.dumps({"email": "pool@example.com", "role": "Mentors"})), None
+                )
+
+    @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_successful_retry_after_cleanup(self, client):
         cognito = Mock()
         cognito.admin_add_user_to_group.side_effect = [
