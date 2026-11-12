@@ -33,7 +33,7 @@ const initialValidation = {
 
 function hasValidationAccess(groups: unknown): boolean {
   return Array.isArray(groups) &&
-    groups.some((group) => group === "string" && ALLOWED_GROUPS.has(group));
+    groups.some((group) => typeof (group) === "string" && ALLOWED_GROUPS.has(group));
 }
 
 export default function ValidationForm({ projectId }: ValidationFormProps) {
