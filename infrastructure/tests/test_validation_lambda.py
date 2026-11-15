@@ -18,13 +18,69 @@ class ValidationLambdaTest(unittest.TestCase):
         body: str,
         project_id: str = "project-123",
         method: str = "PATCH",
+        groups: object = "TechnicalStaff",
     ) -> dict[str, object]:
         return {
             "httpMethod": method,
             "resource": "/validation/projects/{projectId}",
             "pathParameters": {"projectId": project_id},
             "body": body,
+            "requestContext": {"authorizer": {"claims": {"cognito:groups": groups}}},
         }
+
+    def test_all_validation_routes_require_an_allowed_group(self) -> None:
+        routes = (
+            ("GET", "/validation/projects"),
+            ("GET", "/validation/projects/{projectId}"),
+            ("POST", "/validation/projects/{projectId}"),
+            ("PATCH", "/validation/projects/{projectId}"),
+        )
+        allowed_groups = (
+            "Admin", "TechnicalStaff", "Mentors",
+            "Founders,Admin", "Founders,TechnicalStaff",
+            '["Admin", "Mentors"]', "[Admin, TechnicalStaff]",
+            "[Mentors, Founders]",
+        )
+        denied_groups = ("Founders", "Other", "Founders,Other", "", None, "[broken")
+
+        for groups in allowed_groups:
+            for method, resource in routes:
+                with self.subTest(groups=groups, method=method, resource=resource):
+                    event = self.event(
+                        '{"decision":"approved"}',
+                        project_id="project-456",
+                        method=method,
+                        groups=groups,
+                    )
+                    event["resource"] = resource
+                    self.assertNotIn(handler(event, None)["statusCode"], (401, 403))
+
+        for groups in denied_groups:
+            for method, resource in routes:
+                with self.subTest(groups=groups, method=method, resource=resource):
+                    event = self.event('{"decision":"approved"}', method=method, groups=groups)
+                    event["resource"] = resource
+                    self.assertEqual(403, handler(event, None)["statusCode"])
+
+    def test_missing_authorizer_claims_return_401(self) -> None:
+        for request_context in (None, {}, {"authorizer": {}}, {"authorizer": {"claims": "bad"}}):
+            with self.subTest(request_context=request_context):
+                event = self.event('{"decision":"approved"}', method="POST")
+                event["requestContext"] = request_context
+                self.assertEqual(401, handler(event, None)["statusCode"])
+
+    def test_admin_only_can_create_and_update_project_validation(self) -> None:
+        validation = {"decision": "approved", "feedback": "Approved by Admin"}
+        create = handler(self.event(json.dumps(validation), method="POST", groups="Admin"), None)
+        self.assertEqual(201, create["statusCode"])
+        self.assertEqual(validation, json.loads(create["body"])["validation"])
+
+        update = handler(
+            self.event(json.dumps(validation), project_id="project-456", method="PATCH", groups="Admin"),
+            None,
+        )
+        self.assertEqual(200, update["statusCode"])
+        self.assertEqual(validation, json.loads(update["body"])["validation"])
 
     def test_validation_patch_updates_an_existing_mock_validation(self) -> None:
         validation = {
