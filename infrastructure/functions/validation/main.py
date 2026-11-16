@@ -18,6 +18,14 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     method = event.get("httpMethod")
     resource = event.get("resource")
 
+    claims = _claims(event)
+    if claims is None:
+        return _response(401, {"message": "Authentication is required."})
+    if not {"Admin", "TechnicalStaff", "Mentors"}.intersection(
+        _groups(claims.get("cognito:groups"))
+    ):
+        return _response(403, {"message": "Project Validation access is required."})
+
     if method == "PATCH" and resource == "/validation/projects/{projectId}":
         try:
             validation = json.loads(event.get("body"))
@@ -73,6 +81,41 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             "resource": resource,
         },
     )
+
+
+def _claims(event: dict[str, Any]) -> dict[str, Any] | None:
+    request_context = event.get("requestContext")
+    if not isinstance(request_context, dict):
+        return None
+    authorizer = request_context.get("authorizer")
+    if not isinstance(authorizer, dict):
+        return None
+    claims = authorizer.get("claims")
+    return claims if isinstance(claims, dict) else None
+
+
+def _groups(value: Any) -> set[str]:
+    if isinstance(value, list):
+        return {group for group in value if isinstance(group, str)}
+    if not isinstance(value, str):
+        return set()
+    value = value.strip()
+    if not value:
+        return set()
+    if value.startswith("["):
+        if not value.endswith("]"):
+            return set()
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            # API Gateway can stringify Cognito's group list without JSON quotes.
+            groups = [group.strip() for group in value[1:-1].split(",")]
+            return set(groups) if all(group and '"' not in group for group in groups) else set()
+        return (
+            {group for group in parsed if isinstance(group, str)}
+            if isinstance(parsed, list) else set()
+        )
+    return {group.strip() for group in value.split(",") if group.strip()}
 
 
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:

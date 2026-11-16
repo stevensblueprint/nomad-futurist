@@ -1,0 +1,40 @@
+.field {
+  display: grid;
+  gap: var(--nf-space-label);
+}
+.field label {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.field input {
+  width: 100%;
+  min-height: var(--nf-control-height);
+  padding: 0 16px;
+  border: 1px solid var(--nf-border);
+  border-radius: var(--nf-radius);
+  background: white;
+  color: var(--nf-ink);
+  font: inherit;
+}
+.field input::placeholder {
+  color: var(--nf-muted);
+  opacity: 1;
+}
+.field input:focus-visible {
+  outline: 2px solid var(--nf-navy);
+  outline-offset: 2px;
+}
+.field input[aria-invalid="true"] {
+  border-color: var(--nf-error);
+}
+.error {
+  color: var(--nf-error);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.field input:disabled {
+  background: var(--nf-soft);
+  cursor: not-allowed;
+}

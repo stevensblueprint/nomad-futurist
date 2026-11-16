@@ -17,7 +17,7 @@ export default function SignOutButton() {
     setError("");
     try {
       await signOut();
-      router.replace("/sign-up");
+      router.replace("/sign-in");
     } catch {
       setError("Sign out failed. Please try again.");
       inFlight.current = false;

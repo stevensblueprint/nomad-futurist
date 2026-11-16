@@ -1,5 +1,6 @@
 "use client";
 
+import "../auth/amplify-config";
 import { useEffect, useState } from "react";
 import { fetchAuthSession } from "aws-amplify/auth";
 import { Hub } from "aws-amplify/utils";

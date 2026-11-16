@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect } from "react";
@@ -14,17 +15,25 @@ export default function ProtectedLayout({
   const router = useRouter();
 
   useEffect(() => {
-    if (status === "unauthenticated") router.replace("/sign-up");
+    if (status === "unauthenticated") {
+      router.replace("/sign-in");
+    }
   }, [status, router]);
 
-  // Never show protected content until we know the user is signed in
-  if (status !== "authenticated") {
-    return <div role="status" aria-live="polite">Loading…</div>;
+  if (status === "loading") {
+    return <p role="status">Checking session...</p>;
   }
 
-  return <>
-  <header>
-    <SignOutButton />
-  </header>
-  {children}</>;
+  if (status === "unauthenticated") {
+    return <p role="status">Redirecting...</p>;
+  }
+
+  return (
+    <>
+      <header>
+        <SignOutButton />
+      </header>
+      {children}
+    </>
+  );
 }

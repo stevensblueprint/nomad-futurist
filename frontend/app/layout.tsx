@@ -1,3 +1,4 @@
+
 import type { Metadata } from "next";
 import { Albert_Sans, Poppins } from "next/font/google";
 import "./globals.css";
@@ -5,14 +6,14 @@ import ConfigureAmplify from "./ConfigureAmplify";
 
 const albertSans = Albert_Sans({
   subsets: ["latin"],
-  variable: "--next-albert",
+  variable: "--font-albert-sans",
   display: "swap",
 });
 
 const poppins = Poppins({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--next-poppins",
+  weight: ["600"],
+  variable: "--font-poppins",
   display: "swap",
 });
 
@@ -21,13 +22,17 @@ export const metadata: Metadata = {
   description: "A Blueprint App",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"
-      className={`${albertSans.variable} ${poppins.variable} h-full antialiased`}
+      className={`${albertSans.variable} ${poppins.variable} antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">
+      <body className="min-h-full flex flex-col">
         <ConfigureAmplify />
         {children}
       </body>

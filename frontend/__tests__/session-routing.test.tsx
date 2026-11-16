@@ -17,7 +17,20 @@ vi.mock("next/navigation", () => {
   const router = { replace: mocks.replace };
   return { useRouter: () => router };
 });
-vi.mock("aws-amplify/utils", () => ({ Hub: { listen: () => () => {} } }));
+
+vi.mock("aws-amplify/utils", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("aws-amplify/utils")>();
+
+  return {
+    ...actual,
+    Hub: {
+      ...actual.Hub,
+      listen: vi.fn(() => () => { }),
+    },
+  };
+});
+
 vi.mock("aws-amplify/auth", () => ({
   fetchAuthSession: () => mocks.fetchAuthSession(),
   signOut: () => mocks.signOut(),
@@ -34,10 +47,10 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(() => cleanup());
 
 describe("protected routes", () => {
-  it("redirects signed-out users to /sign-up and hides content", async () => {
+  it("redirects signed-out users to /sign-in and hides content", async () => {
     mocks.fetchAuthSession.mockResolvedValue(signedOut);
     render(<ProtectedLayout><p>secret</p></ProtectedLayout>);
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-up"));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in"));
     expect(screen.queryByText("secret")).toBeNull();
   });
 
@@ -49,7 +62,7 @@ describe("protected routes", () => {
   });
 
   it("does not redirect or show content while loading", () => {
-    mocks.fetchAuthSession.mockReturnValue(new Promise(() => {}));
+    mocks.fetchAuthSession.mockReturnValue(new Promise(() => { }));
     render(<ProtectedLayout><p>secret</p></ProtectedLayout>);
     expect(screen.queryByText("secret")).toBeNull();
     expect(mocks.replace).not.toHaveBeenCalled();
@@ -73,7 +86,7 @@ describe("public routes", () => {
 });
 
 describe("sign out", () => {
-  it("calls signOut once on double-click, then redirects to /sign-up", async () => {
+  it("calls signOut once on double-click, then redirects to /sign-in", async () => {
     let finish!: () => void;
     mocks.signOut.mockReturnValue(new Promise<void>((r) => (finish = r)));
     render(<SignOutButton />);
@@ -84,7 +97,7 @@ describe("sign out", () => {
     expect(mocks.signOut).toHaveBeenCalledTimes(1);
 
     finish();
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-up"));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in"));
   });
 
   it("shows an error and allows retry when signOut fails", async () => {
