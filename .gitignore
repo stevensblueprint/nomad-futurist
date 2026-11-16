@@ -21,6 +21,9 @@ cdk.out/
 .env.local
 .env.*.local
 
+# Local agent skills (personal tooling, not part of the project)
+.cursor/skills/socratic-tutor/
+
 
 # flake lock
 flake.lock

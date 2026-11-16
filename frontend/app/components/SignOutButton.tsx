@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "aws-amplify/auth";
 
-export default function SignOutButton() {
+export default function SignOutButton({ className }: { className?: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -27,10 +27,14 @@ export default function SignOutButton() {
 
   return (
     <div>
-      <button type="button" onClick={handleSignOut} disabled={loading}>
+      <button type="button" onClick={handleSignOut} disabled={loading} className={className}>
         {loading ? "Signing out…" : "Sign out"}
       </button>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-1 px-3 text-xs text-nf-error">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
