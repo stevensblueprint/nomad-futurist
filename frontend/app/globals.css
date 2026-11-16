@@ -7,7 +7,18 @@
 
 @theme inline {
   --font-sans: var(--font-albert-sans);
+  --font-heading: var(--font-poppins);
   --font-mono: ui-monospace, monospace;
+
+  /* Nomad Futurist design tokens, usable as Tailwind utilities (bg-nf-navy, text-nf-muted, ...) */
+  --color-nf-copper: var(--nf-copper);
+  --color-nf-navy: var(--nf-navy);
+  --color-nf-ink: var(--nf-ink);
+  --color-nf-muted: var(--nf-muted);
+  --color-nf-border: var(--nf-border);
+  --color-nf-soft: var(--nf-soft);
+  --color-nf-canvas: var(--nf-canvas);
+  --color-nf-error: var(--nf-error);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -30,6 +41,7 @@ body {
   --nf-muted: #464950;
   --nf-border: #d8dce0;
   --nf-soft: #f4f6f7;
+  --nf-canvas: #f7f8f9;
   --nf-error: #a52c29;
   --nf-font-body: var(--font-albert-sans), Arial, sans-serif;
   --nf-font-heading: var(--font-poppins), Arial, sans-serif;

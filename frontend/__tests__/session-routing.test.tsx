@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => {
   const router = { replace: mocks.replace };
-  return { useRouter: () => router };
+  return { useRouter: () => router, usePathname: () => "/" };
 });
 
 vi.mock("aws-amplify/utils", async (importOriginal) => {

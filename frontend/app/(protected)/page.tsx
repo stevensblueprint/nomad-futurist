@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fetchAuthSession } from "aws-amplify/auth";
 import "../auth/amplify-config";
@@ -39,15 +40,20 @@ export default function Home() {
       <div className={styles.content}>
         <h1>Home</h1>
 
-        {isFounder && (
-          <button
-            className={styles.registerButton}
-            type="button"
-            onClick={() => router.push("/registration")}
-          >
-            Register your project
-          </button>
-        )}
+        <div className={styles.actions}>
+          {isFounder && (
+            <button
+              className={styles.registerButton}
+              type="button"
+              onClick={() => router.push("/registration")}
+            >
+              Register your project
+            </button>
+          )}
+          <Link className={styles.registerButton} href="/projects">
+            View my projects
+          </Link>
+        </div>
       </div>
     </main>
   );
