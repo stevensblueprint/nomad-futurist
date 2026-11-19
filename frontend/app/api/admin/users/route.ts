@@ -1,4 +1,4 @@
-import { buildUsersEndpoint } from "../../../admin/users/adminUsers";
+import { buildUsersEndpoint } from "../../../(protected)/admin/users/adminUsers";
 
 const MAX_REQUEST_BYTES = 16 * 1024;
 const MAX_UPSTREAM_BYTES = 64 * 1024;
@@ -36,7 +36,7 @@ async function readLimited(
       if (done) break;
       total += value.byteLength;
       if (total > limit) {
-        await reader.cancel().catch(() => {});
+        await reader.cancel().catch(() => { });
         return null;
       }
       chunks.push(value);
