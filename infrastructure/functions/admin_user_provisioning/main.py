@@ -40,9 +40,9 @@ def _groups(claims):
     return [group.strip() for group in group_claim.split(",")]
 
 
-def _cleanup_user(cognito, user_pool_id, email):
+def _cleanup_user(cognito, user_pool_id, cognito_username):
     try:
-        cognito.admin_delete_user(UserPoolId=user_pool_id, Username=email)
+        cognito.admin_delete_user(UserPoolId=user_pool_id, Username=cognito_username)
     except (BotoCoreError, ClientError):
         LOGGER.exception("Failed to clean up partially provisioned Cognito user")
 
@@ -82,7 +82,7 @@ def handler(event, _context):
     created_user = False
     try:
         cognito = boto3.client("cognito-idp")
-        cognito.admin_create_user(
+        result = cognito.admin_create_user(
             UserPoolId=user_pool_id,
             Username=email,
             UserAttributes=[
@@ -91,36 +91,37 @@ def handler(event, _context):
             ],
             DesiredDeliveryMediums=["EMAIL"],
         )
+
         created_user = True
+        cognito_username = result["User"]["Username"]
+
         cognito.admin_add_user_to_group(
-            UserPoolId=user_pool_id, Username=email, GroupName=selected_group
+            UserPoolId=user_pool_id, Username=cognito_username, GroupName=selected_group
         )
         cognito.admin_set_user_mfa_preference(
             UserPoolId=user_pool_id,
-            Username=email,
+            Username=cognito_username,
             EmailMfaSettings={"Enabled": True, "PreferredMfa": True},
         )
     except ClientError as error:
         error_code = error.response.get("Error", {}).get("Code")
+
         if error_code == "UsernameExistsException" and not created_user:
             return _response(409, "An account already exists for this email.")
-        # Log the cause without the invited email. The response stays generic.
-        LOGGER.exception(
-            "Cognito provisioning failed (code=%s, operation=%s, user_created=%s)",
-            error_code,
-            error.operation_name,
-            created_user,
-        )
-        if created_user:
-            _cleanup_user(cognito, user_pool_id, email)
+
+        LOGGER.exception("Cognito provisioning failed (code=%s, operation=%s, user_created=%s)", error_code, error.operation_name, created_user)
+
+        if created_user and cognito_username:
+            _cleanup_user(cognito, user_pool_id, cognito_username)
+
         return _response(500, "Unable to provision the user.")
+
     except BotoCoreError:
-        LOGGER.exception(
-            "Cognito provisioning failed with a client error (user_created=%s)",
-            created_user,
-        )
-        if created_user:
-            _cleanup_user(cognito, user_pool_id, email)
+        LOGGER.exception("Cognito provisioning failed with a client error (user_created=%s)", created_user,)
+
+        if created_user and cognito_username:
+            _cleanup_user(cognito, user_pool_id, cognito_username)
+
         return _response(500, "Unable to provision the user.")
 
     return _response(201, "User invitation sent.")

@@ -7,6 +7,8 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from functions.admin_user_provisioning.main import handler
 
+GENERATED_USERNAME = "123e4567-e89b-42d3-a456-426614174000"
+
 
 class AdminUserProvisioningTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -15,6 +17,16 @@ class AdminUserProvisioningTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.environment.stop()
+
+    @staticmethod
+    def mock_cognito():
+        cognito = Mock()
+        cognito.admin_create_user.return_value = {
+            "User": {
+                "Username": "123e4567-e89b-42d3-a456-426614174000"
+            }
+        }
+        return cognito
 
     @staticmethod
     def event(groups, body):
@@ -34,18 +46,17 @@ class AdminUserProvisioningTest(unittest.TestCase):
             "body": json.dumps({"message": message}),
         }
 
+    
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_technical_staff_provisioning_creates_user_group_and_mfa(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         client.return_value = cognito
 
-        result = handler(
-            self.event(["Member", "Admin"], json.dumps({"email": "staff@example.com", "role": "TechnicalStaff"})),
-            None,
-        )
+        result = handler(self.event(["Member", "Admin"], json.dumps({"email": "staff@example.com", "role": "TechnicalStaff",}),), None)
 
         self.assertEqual(self.response(201, "User invitation sent."), result)
         client.assert_called_once_with("cognito-idp")
+
         cognito.admin_create_user.assert_called_once_with(
             UserPoolId="pool-id",
             Username="staff@example.com",
@@ -55,14 +66,19 @@ class AdminUserProvisioningTest(unittest.TestCase):
             ],
             DesiredDeliveryMediums=["EMAIL"],
         )
+
         cognito.admin_add_user_to_group.assert_called_once_with(
-            UserPoolId="pool-id", Username="staff@example.com", GroupName="TechnicalStaff"
+            UserPoolId="pool-id",
+            Username=GENERATED_USERNAME,
+            GroupName="TechnicalStaff",
         )
+
         cognito.admin_set_user_mfa_preference.assert_called_once_with(
             UserPoolId="pool-id",
-            Username="staff@example.com",
+            Username=GENERATED_USERNAME,
             EmailMfaSettings={"Enabled": True, "PreferredMfa": True},
         )
+
         self.assertEqual(
             [
                 call.admin_create_user(
@@ -75,11 +91,13 @@ class AdminUserProvisioningTest(unittest.TestCase):
                     DesiredDeliveryMediums=["EMAIL"],
                 ),
                 call.admin_add_user_to_group(
-                    UserPoolId="pool-id", Username="staff@example.com", GroupName="TechnicalStaff"
+                    UserPoolId="pool-id",
+                    Username=GENERATED_USERNAME,
+                    GroupName="TechnicalStaff",
                 ),
                 call.admin_set_user_mfa_preference(
                     UserPoolId="pool-id",
-                    Username="staff@example.com",
+                    Username=GENERATED_USERNAME,
                     EmailMfaSettings={"Enabled": True, "PreferredMfa": True},
                 ),
             ],
@@ -88,7 +106,7 @@ class AdminUserProvisioningTest(unittest.TestCase):
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_comma_separated_admin_group_claim_reaches_cognito_provisioning(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         client.return_value = cognito
 
         result = handler(
@@ -102,7 +120,7 @@ class AdminUserProvisioningTest(unittest.TestCase):
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_mentors_role_maps_to_mentors_group(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         client.return_value = cognito
 
         result = handler(
@@ -112,7 +130,7 @@ class AdminUserProvisioningTest(unittest.TestCase):
 
         self.assertEqual(self.response(201, "User invitation sent."), result)
         cognito.admin_add_user_to_group.assert_called_once_with(
-            UserPoolId="pool-id", Username="mentor@example.com", GroupName="Mentors"
+            UserPoolId="pool-id", Username=GENERATED_USERNAME, GroupName="Mentors"
         )
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
@@ -169,7 +187,7 @@ class AdminUserProvisioningTest(unittest.TestCase):
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_duplicate_cognito_user_maps_to_conflict(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         cognito.admin_create_user.side_effect = ClientError(
             {"Error": {"Code": "UsernameExistsException", "Message": "duplicate"}}, "AdminCreateUser"
         )
@@ -184,7 +202,7 @@ class AdminUserProvisioningTest(unittest.TestCase):
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_unexpected_cognito_failure_maps_to_internal_error(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         cognito.admin_add_user_to_group.side_effect = ClientError(
             {"Error": {"Code": "InternalErrorException", "Message": "details"}}, "AdminAddUserToGroup"
         )
@@ -198,7 +216,7 @@ class AdminUserProvisioningTest(unittest.TestCase):
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_group_assignment_failure_deletes_created_user(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         cognito.admin_add_user_to_group.side_effect = ClientError(
             {"Error": {"Code": "InternalErrorException", "Message": "details"}}, "AdminAddUserToGroup"
         )
@@ -209,11 +227,11 @@ class AdminUserProvisioningTest(unittest.TestCase):
         )
 
         self.assertEqual(self.response(500, "Unable to provision the user."), result)
-        cognito.admin_delete_user.assert_called_once_with(UserPoolId="pool-id", Username="group@example.com")
+        cognito.admin_delete_user.assert_called_once_with(UserPoolId="pool-id", Username=GENERATED_USERNAME)
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_mfa_preference_failure_deletes_created_user(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         cognito.admin_set_user_mfa_preference.side_effect = ClientError(
             {"Error": {"Code": "InternalErrorException", "Message": "details"}},
             "AdminSetUserMfaPreference",
@@ -225,11 +243,11 @@ class AdminUserProvisioningTest(unittest.TestCase):
         )
 
         self.assertEqual(self.response(500, "Unable to provision the user."), result)
-        cognito.admin_delete_user.assert_called_once_with(UserPoolId="pool-id", Username="mfa@example.com")
+        cognito.admin_delete_user.assert_called_once_with(UserPoolId="pool-id", Username=GENERATED_USERNAME)
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_boto_core_group_assignment_failure_deletes_created_user(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         cognito.admin_add_user_to_group.side_effect = BotoCoreError()
         client.return_value = cognito
 
@@ -238,11 +256,11 @@ class AdminUserProvisioningTest(unittest.TestCase):
         )
 
         self.assertEqual(self.response(500, "Unable to provision the user."), result)
-        cognito.admin_delete_user.assert_called_once_with(UserPoolId="pool-id", Username="boto-core@example.com")
+        cognito.admin_delete_user.assert_called_once_with(UserPoolId="pool-id", Username=GENERATED_USERNAME)
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_cleanup_failure_is_logged_and_returns_safe_error(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         cognito.admin_add_user_to_group.side_effect = ClientError(
             {"Error": {"Code": "InternalErrorException", "Message": "details"}}, "AdminAddUserToGroup"
         )
@@ -257,11 +275,11 @@ class AdminUserProvisioningTest(unittest.TestCase):
             )
 
         self.assertEqual(self.response(500, "Unable to provision the user."), result)
-        cognito.admin_delete_user.assert_called_once_with(UserPoolId="pool-id", Username="cleanup@example.com")
+        cognito.admin_delete_user.assert_called_once_with(UserPoolId="pool-id", Username=GENERATED_USERNAME)
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_cognito_failure_logs_error_code_without_email(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         cognito.admin_create_user.side_effect = ClientError(
             {"Error": {"Code": "InvalidParameterException", "Message": "SES sandbox"}}, "AdminCreateUser"
         )
@@ -291,7 +309,7 @@ class AdminUserProvisioningTest(unittest.TestCase):
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_duplicate_user_conflict_is_not_logged_as_error(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         cognito.admin_create_user.side_effect = ClientError(
             {"Error": {"Code": "UsernameExistsException", "Message": "duplicate"}}, "AdminCreateUser"
         )
@@ -314,7 +332,7 @@ class AdminUserProvisioningTest(unittest.TestCase):
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_successful_retry_after_cleanup(self, client):
-        cognito = Mock()
+        cognito = self.mock_cognito()
         cognito.admin_add_user_to_group.side_effect = [
             ClientError({"Error": {"Code": "InternalErrorException", "Message": "details"}}, "AdminAddUserToGroup"),
             None,
@@ -327,7 +345,7 @@ class AdminUserProvisioningTest(unittest.TestCase):
 
         self.assertEqual(self.response(500, "Unable to provision the user."), first_result)
         self.assertEqual(self.response(201, "User invitation sent."), second_result)
-        cognito.admin_delete_user.assert_called_once_with(UserPoolId="pool-id", Username="retry@example.com")
+        cognito.admin_delete_user.assert_called_once_with(UserPoolId="pool-id", Username=GENERATED_USERNAME)
 
     @patch("functions.admin_user_provisioning.main.boto3.client")
     def test_missing_user_pool_id_returns_safe_error(self, client):
