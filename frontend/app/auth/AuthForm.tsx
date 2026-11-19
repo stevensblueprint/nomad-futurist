@@ -11,9 +11,25 @@ import AuthErrorNotice from "./AuthErrorNotice";
 import { authErrorMessage } from "./auth-errors";
 import { getSignInOutcome, validatePassword } from "./authLogic";
 import "./amplify-config";
-import { autoSignIn, confirmSignUp, fetchAuthSession, signIn, signUp } from "aws-amplify/auth";
+import {
+  autoSignIn,
+  confirmSignIn,
+  confirmSignUp,
+  fetchAuthSession,
+  signIn,
+  signUp,
+} from "aws-amplify/auth";
 type FieldName = "email" | "password" | "confirmPassword" | "confirmationCode";
 type FieldErrors = Partial<Record<FieldName, string>>;
+// Extra Cognito sign-in steps, such as an admin's first sign-in with a temporary password.
+type Challenge = "new-password" | "email-code" | null;
+
+function isEmailCodeStep(step: string): boolean {
+  return (
+    step === "CONFIRM_SIGN_IN_WITH_EMAIL_CODE" ||
+    step === "CONFIRM_SIGN_IN_WITH_OTP"
+  );
+}
 
 type AuthFormProps = {
   mode: "sign-up" | "sign-in";
@@ -35,6 +51,7 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
   const [pendingEmail, setPendingEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [checkingSession, setCheckingSession] = useState(!isSignUp);
+  const [challenge, setChallenge] = useState<Challenge>(null);
   const submissionInProgress = useRef(false);
   const displayedError = localAuthError || authenticationError;
 
@@ -64,20 +81,25 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
 
   function validate(form: HTMLFormElement): FieldErrors {
     const data = new FormData(form);
-    const email = awaitingConfirmation ? pendingEmail : String(data.get("email") ?? "").trim();
+    const email = String(data.get("email") ?? "").trim();
     const password = String(data.get("password") ?? "");
     const confirmation = String(data.get("confirmPassword") ?? "");
-    const emailInput = form.elements.namedItem("email") as HTMLInputElement;
+    const emailInput = form.elements.namedItem("email") as HTMLInputElement | null;
     const nextErrors: FieldErrors = {};
 
-    if (!email) nextErrors.email = "Enter your email address.";
-    else if (!awaitingConfirmation && emailInput.validity.typeMismatch)
-      nextErrors.email = "Enter a valid email address.";
+    // The email field is absent after sign-up or while a sign-in challenge is open.
+    if (!awaitingConfirmation && challenge === null) {
+      if (!email) nextErrors.email = "Enter your email address.";
+      else if (emailInput?.validity.typeMismatch)
+        nextErrors.email = "Enter a valid email address.";
+    }
 
-    if (awaitingConfirmation) {
+    if (awaitingConfirmation || challenge === "email-code") {
       if (!String(data.get("confirmationCode") ?? "").trim())
-        nextErrors.confirmationCode = "Enter your confirmation code.";
-    } else if (isSignUp) {
+        nextErrors.confirmationCode = awaitingConfirmation
+          ? "Enter your confirmation code."
+          : "Enter your email code.";
+    } else if (isSignUp || challenge === "new-password") {
       if (!password) nextErrors.password = "Enter your password.";
       else {
         const issues = validatePassword(password);
@@ -93,6 +115,30 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
 
     return nextErrors;
   }
+
+  function handleSignInResult(result: {
+    isSignedIn: boolean;
+    nextStep: { signInStep: string };
+  }) {
+    if (result.isSignedIn) {
+      router.replace("/");
+      return;
+    }
+    const step = result.nextStep.signInStep;
+    if (step === "CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED") {
+      setChallenge("new-password");
+      setErrors({});
+      setNotice("Create a new password.");
+    } else if (isEmailCodeStep(step)) {
+      setChallenge("email-code");
+      setErrors({});
+      setNotice("Enter the code from your email.");
+    } else {
+      const outcome = getSignInOutcome(result);
+      if (!outcome.isSignedIn) setLocalAuthError(outcome.message);
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (checkingSession || submissionInProgress.current) return;
@@ -120,7 +166,16 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
     setSubmitting(true);
     submissionInProgress.current = true;
     try {
-      if (awaitingConfirmation) {
+      if (challenge) {
+        handleSignInResult(
+          await confirmSignIn({
+            challengeResponse:
+              challenge === "email-code"
+                ? String(data.get("confirmationCode") ?? "").trim()
+                : password,
+          }),
+        );
+      } else if (awaitingConfirmation) {
         const { isSignUpComplete } = await confirmSignUp({
           username: pendingEmail,
           confirmationCode: String(data.get("confirmationCode") ?? "").trim(),
@@ -156,12 +211,7 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
           setNotice("Account created. You can now sign in.");
         }
       } else {
-        const result = getSignInOutcome(await signIn({ username: email, password }));
-        if (result.isSignedIn) {
-          router.replace("/");
-        } else {
-          setLocalAuthError(result.message);
-        }
+        handleSignInResult(await signIn({ username: email, password }));
       }
     } catch (err) {
       // Another tab can sign in after the initial session check.
@@ -183,20 +233,38 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
     }
   }
 
+  const fieldContext = awaitingConfirmation ? "confirm" : (challenge ?? "default");
+  const showPasswordRequirements = isSignUp || challenge === "new-password";
+
   const fields: {
     name: FieldName;
     label: string;
     autoComplete: string;
     type: "email" | "password" | "text";
     inputMode?: "numeric";
-  }[] = awaitingConfirmation
+  }[] = awaitingConfirmation || challenge === "email-code"
       ? [
         {
           name: "confirmationCode",
-          label: "Confirmation code",
+          label: awaitingConfirmation ? "Confirmation code" : "Email code",
           type: "text",
           inputMode: "numeric",
           autoComplete: "one-time-code",
+        },
+      ]
+      : challenge === "new-password"
+      ? [
+        {
+          name: "password",
+          label: "New password",
+          type: "password",
+          autoComplete: "new-password",
+        },
+        {
+          name: "confirmPassword",
+          label: "Confirm new password",
+          type: "password",
+          autoComplete: "new-password",
         },
       ]
       : [
@@ -236,18 +304,24 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
     <AuthLayout>
       <header className={styles.header}>
         <h1 id="auth-heading">
-          {awaitingConfirmation
+          {awaitingConfirmation || challenge === "email-code"
             ? "Check your email"
-            : isSignUp
-              ? "Create your account"
-              : "Welcome back"}
+            : challenge === "new-password"
+              ? "Set a new password"
+              : isSignUp
+                ? "Create your account"
+                : "Welcome back"}
         </h1>
         <p>
           {awaitingConfirmation
             ? `We sent a code to ${pendingEmail}. Enter it below to confirm your account.`
-            : isSignUp
-              ? "Start your journey as a founder."
-              : "Sign in to your Nomad Incubator account."}
+            : challenge === "email-code"
+              ? "We sent a sign-in code to your email. Enter it below to finish signing in."
+              : challenge === "new-password"
+                ? "Choose a new password to finish signing in."
+                : isSignUp
+                  ? "Start your journey as a founder."
+                  : "Sign in to your Nomad Incubator account."}
         </p>
       </header>
 
@@ -287,7 +361,7 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
         {fields.map(
           ({ name, label, autoComplete, type, inputMode }) => (
             <FormField
-              key={`${name}-${awaitingConfirmation}`}
+              key={`${name}-${fieldContext}`}
               id={name}
               label={label}
               error={errors[name]}
@@ -314,7 +388,7 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
                 aria-describedby={
                   [
                     errors[name] ? `${name}-error` : undefined,
-                    name === "password" && isSignUp
+                    name === "password" && showPasswordRequirements
                       ? "password-requirements"
                       : undefined,
                     name === "confirmationCode" ? "code-help" : undefined,
@@ -323,7 +397,7 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
                     .join(" ") || undefined
                 }
               />
-              {name === "password" && isSignUp && (
+              {name === "password" && showPasswordRequirements && (
                 <p id="password-requirements" className={styles.requirements}>
                   At least 8 characters, including uppercase and lowercase
                   letters, a number, and a special character.
@@ -331,7 +405,9 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
               )}
               {name === "confirmationCode" && (
                 <p id="code-help" className={styles.requirements}>
-                  Use the code from your confirmation email.
+                  {awaitingConfirmation
+                    ? "Use the code from your confirmation email."
+                    : "Use the code from your sign-in email."}
                 </p>
               )}
             </FormField>
@@ -357,18 +433,24 @@ export default function AuthForm({ mode, authenticationError, initialNotice }: A
           type="submit"
           loading={submitting}
           loadingLabel={
-            awaitingConfirmation
+            awaitingConfirmation || challenge === "email-code"
               ? "Confirming…"
-              : isSignUp
-                ? "Creating account…"
-                : "Signing in…"
+              : challenge === "new-password"
+                ? "Setting password…"
+                : isSignUp
+                  ? "Creating account…"
+                  : "Signing in…"
           }
         >
           {awaitingConfirmation
             ? "Confirm email"
-            : isSignUp
-              ? "Create founder account"
-              : "Sign in"}
+            : challenge === "email-code"
+              ? "Confirm code"
+              : challenge === "new-password"
+                ? "Set password"
+                : isSignUp
+                  ? "Create founder account"
+                  : "Sign in"}
         </PrimaryButton>
       </form>
 

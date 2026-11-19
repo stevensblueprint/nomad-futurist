@@ -6,12 +6,14 @@ out/
 # Node
 node_modules/
 
+# TypeScript
+*.tsbuildinfo
+
 # Python
 .venv/
 venv/
 __pycache__/
 *.py[cod]
-*.tsbuildinfo
 
 # AWS CDK
 cdk.out/
@@ -23,5 +25,3 @@ cdk.out/
 
 
 # flake lock
-flake.lock
-*.tsbuildinfo
