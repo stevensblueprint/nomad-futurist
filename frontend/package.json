@@ -13,7 +13,8 @@
     "test:routing": "vitest run __tests__/session-routing.test.tsx",
     "test:auth-ui": "vitest run app/auth/AuthForm.test.tsx",
     "test:admin": "vitest run app/admin app/api",
-    "test": "npm run test:registration && npm run test:auth && npm run test:validation && npm run test:routing && npm run test:auth-ui && npm run test:admin",
+    "test:projects": "vitest run __tests__/projects-dashboard.test.tsx",
+    "test": "npm run test:registration && npm run test:auth && npm run test:validation && npm run test:routing && npm run test:auth-ui && npm run test:admin && npm run test:projects",
     "test:watch": "vitest"
   },
   "dependencies": {
