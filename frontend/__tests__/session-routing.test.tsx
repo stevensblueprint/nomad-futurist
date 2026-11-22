@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { StrictMode } from "react";
 import {
   render,
   act,
@@ -52,7 +53,7 @@ const signedOut = { tokens: undefined };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.fetch.mockReset().mockResolvedValue(Response.json({ stories: [] }));
+  mocks.fetch.mockReset().mockImplementation(async () => Response.json({ stories: [] }));
   vi.stubGlobal("fetch", mocks.fetch);
 });
 afterEach(() => {
@@ -147,6 +148,12 @@ describe("user portal", () => {
 
     expect(await screen.findByText("Loading startup news…")).toBeTruthy();
     expect(screen.getByText("Data Center Sustainability Analyst")).toBeTruthy();
+    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Jobs" }));
+    expect(screen.queryByText("Loading startup news…")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "News" }));
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch.mock.calls[0][1].signal.aborted).toBe(false);
     finish(Response.json({
       stories: [{
         id: "123",
@@ -160,6 +167,7 @@ describe("user portal", () => {
     expect(screen.getByText(/publisher.example/)).toBeTruthy();
     expect(screen.getByRole("link", { name: /Read the article/ })).toHaveAttribute("href", "https://publisher.example/startup");
     expect(screen.getByRole("link", { name: "Hacker News discussion" })).toHaveAttribute("href", "https://news.ycombinator.com/item?id=123");
+    expect(screen.getByText("Nov 17, 2026")).toHaveAttribute("datetime", "2026-11-17T00:00:00.000Z");
     expect(screen.queryByText("What liquid cooling changes for early-stage founders")).toBeNull();
   });
 
@@ -198,6 +206,155 @@ describe("user portal", () => {
     expect(await screen.findByRole("heading", { name: "My projects" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "EdgeLoop tasks" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Back to the portal" })).toHaveAttribute("href", "/");
+  });
+
+  it("cancels the previous topic request and ignores late results when the project filter changes", async () => {
+    mocks.fetchAuthSession.mockResolvedValue(signedIn);
+    let finishOldRequest!: (response: Response) => void;
+    mocks.fetch.mockReturnValueOnce(new Promise<Response>((resolve) => { finishOldRequest = resolve; }));
+    render(<ProtectedLayout><UserPortal /></ProtectedLayout>);
+
+    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(1));
+    const startupSignal = mocks.fetch.mock.calls[0][1].signal;
+    fireEvent.change(screen.getByLabelText("Project"), { target: { value: "EdgeLoop" } });
+    expect(startupSignal.aborted).toBe(true);
+    expect(await screen.findByText("Taking edge infrastructure closer to the customer")).toBeTruthy();
+    expect(mocks.fetch).toHaveBeenLastCalledWith("/api/startup-news?topic=edge-computing", expect.anything());
+
+    await act(async () => finishOldRequest(storyResponse("Late startup story")));
+    expect(screen.queryByText("Late startup story")).toBeNull();
+    expect(screen.getByText("Taking edge infrastructure closer to the customer")).toBeTruthy();
+  });
+});
+
+function storyResponse(title: string) {
+  return Response.json({
+    stories: [{
+      id: "123",
+      title,
+      url: "https://publisher.example/startup",
+      publisher: "publisher.example",
+      postedAt: "2026-11-17T00:00:00.000Z",
+    }],
+  });
+}
+
+describe("startup news refresh", () => {
+  const initialTime = new Date("2026-11-21T15:00:00.000Z");
+  const day = 24 * 60 * 60 * 1000;
+  const cacheWindow = 15 * 60 * 1000;
+  const newsProps = { topic: "startups", limit: 1, fallback: <p>Sample briefing</p> } as const;
+  const news = <StartupNews {...newsProps} />;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(initialTime);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  function advance(ms: number) {
+    return act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  }
+
+  it("fetches once on mount and refreshes automatically every day", async () => {
+    mocks.fetch
+      .mockResolvedValueOnce(storyResponse("Initial startup headline"))
+      .mockResolvedValueOnce(storyResponse("Next day’s startup headline"))
+      .mockResolvedValueOnce(storyResponse("Following day’s startup headline"));
+    const { rerender } = render(<StrictMode>{news}</StrictMode>);
+
+    await advance(0);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Initial startup headline")).toBeTruthy();
+    expect(screen.getByText(/Last refreshed at/).querySelector("time")).toHaveAttribute("datetime", initialTime.toISOString());
+
+    await advance(day - 1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("Next day’s startup headline")).toBeTruthy();
+    expect(screen.getByText(/Last refreshed at/).querySelector("time")).toHaveAttribute("datetime", "2026-11-22T15:00:00.000Z");
+
+    rerender(<StrictMode><StartupNews {...newsProps} visible={false} /></StrictMode>);
+    await advance(day);
+    expect(mocks.fetch).toHaveBeenCalledTimes(3);
+    expect(screen.queryByText("Following day’s startup headline")).toBeNull();
+    rerender(<StrictMode>{news}</StrictMode>);
+    expect(screen.getByText("Following day’s startup headline")).toBeTruthy();
+  });
+
+  it("checks the feed on return after 15 minutes and skips duplicate or overlapping requests", async () => {
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    let finishRefresh!: (response: Response) => void;
+    mocks.fetch
+      .mockResolvedValueOnce(storyResponse("Initial startup headline"))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { finishRefresh = resolve; }));
+    render(news);
+    await advance(0);
+
+    await advance(cacheWindow - 1);
+    fireEvent(document, new Event("visibilitychange"));
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+
+    visibility.mockReturnValue("hidden");
+    await advance(1);
+    fireEvent(document, new Event("visibilitychange"));
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    visibility.mockReturnValue("visible");
+    fireEvent(document, new Event("visibilitychange"));
+    fireEvent.focus(window);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("Refreshing startup news…")).toBeTruthy();
+    expect(screen.getByText("Initial startup headline")).toBeTruthy();
+
+    // A suspended tab can resume before its queued timeout is delivered.
+    vi.setSystemTime(Date.now() + cacheWindow);
+    fireEvent.focus(window);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    await act(async () => finishRefresh(storyResponse("Updated startup headline")));
+    expect(screen.getByText("Updated startup headline")).toBeTruthy();
+  });
+
+  it("keeps the last successful stories and timestamp during an outage, then updates them after retry", async () => {
+    mocks.fetch
+      .mockResolvedValueOnce(storyResponse("Initial startup headline"))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(storyResponse("Recovered startup headline"));
+    render(news);
+    await advance(0);
+    await advance(day);
+
+    expect(screen.getByText("Initial startup headline")).toBeTruthy();
+    expect(screen.getByText(/Last refreshed at/).querySelector("time")).toHaveAttribute("datetime", initialTime.toISOString());
+    expect(screen.getByText(/Showing stories from the last successful refresh/)).toBeTruthy();
+    expect(screen.queryByText("Sample briefing")).toBeNull();
+
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Retry news" })));
+    expect(screen.getByText("Recovered startup headline")).toBeTruthy();
+    expect(screen.queryByText("Initial startup headline")).toBeNull();
+    expect(screen.getByText(/Last refreshed at/).querySelector("time")).toHaveAttribute("datetime", "2026-11-22T15:00:00.000Z");
+  });
+
+  it("aborts the pending request and removes refresh timers and listeners on unmount", async () => {
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    mocks.fetch.mockReturnValue(new Promise<Response>(() => {}));
+    const { unmount } = render(news);
+    await advance(0);
+    const signal = mocks.fetch.mock.calls[0][1].signal;
+    expect(signal.aborted).toBe(false);
+
+    unmount();
+    expect(signal.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    await advance(day);
+    fireEvent(document, new Event("visibilitychange"));
+    fireEvent.focus(window);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
 });
 
