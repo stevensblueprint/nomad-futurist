@@ -1,10 +1,9 @@
-
 "use client";
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthSession } from "../hooks/useAuthSession";
-import SignOutButton from "../components/SignOutButton";
+import PortalShell from "../components/portal/PortalShell";
 
 export default function ProtectedLayout({
   children,
@@ -28,12 +27,5 @@ export default function ProtectedLayout({
     return <p role="status">Redirecting...</p>;
   }
 
-  return (
-    <>
-      <header>
-        <SignOutButton />
-      </header>
-      {children}
-    </>
-  );
+  return <PortalShell>{children}</PortalShell>;
 }
