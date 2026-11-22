@@ -101,16 +101,15 @@ export default function UserPortal() {
 
         <div className={styles.columns}>
           <div className={styles.stack}>
-            {showNews && (
-              <StartupNews
-                key={newsTopic}
-                topic={newsTopic}
-                limit={category === "All updates" ? 1 : 6}
-                fallback={updates.filter((item) => item.category === "News").map((item) => (
-                  <SampleUpdate key={item.title} item={item} />
-                ))}
-              />
-            )}
+            <StartupNews
+              key={newsTopic}
+              topic={newsTopic}
+              limit={category === "All updates" ? 1 : 6}
+              visible={showNews}
+              fallback={updates.filter((item) => item.category === "News").map((item) => (
+                <SampleUpdate key={item.title} item={item} />
+              ))}
+            />
             {!showNews && updates.length === 0 && <p className={styles.card} role="status">No updates match these filters.</p>}
             {updates.filter((item) => item.category !== "News").map((item) => (
               <SampleUpdate key={item.title} item={item} />
